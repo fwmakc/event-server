@@ -21,7 +21,7 @@ auth-server ──[POST /events]──> event-server ──[POST /webhook]──
 CORE (stable, shared across projects)
   auth-server/     OAuth2, JWT/JWKS, social login
   api-server-toolkit/  api-server-toolkit (CRUD engine, guards)
-  gateway/         nginx + docker-compose
+  gateway-server/  nginx + docker-compose
   event-server/    this repo (central event broker)
 
 DOMAIN (clone per project)
