@@ -2,10 +2,10 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY event-server/package*.json ./
-RUN npm ci
+COPY package*.json ./
+RUN npm install
 
-COPY event-server/ ./
+COPY . .
 RUN npm run build
 
 # --- Runner ---
