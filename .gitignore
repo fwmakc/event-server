@@ -1,5 +1,7 @@
 # compiled output
-/dist
+/dist/*
+!/dist/contracts/
+*.tsbuildinfo
 /node_modules
 /sessions
 .env
