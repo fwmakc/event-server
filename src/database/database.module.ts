@@ -1,3 +1,4 @@
+import { join } from "path";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -17,8 +18,10 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "./entities";
         password: config.get<string>("DB_PASSWORD", "1234"),
         database: config.get<string>("DB_NAME", "event_server"),
         entities: [EventEntity, SubscriberEntity, DeliveryEntity],
-        synchronize: config.get<string>("DB_SYNCHRONIZE", "true") === "true",
-        logging: false,
+        synchronize: config.get<string>("DB_SYNCHRONIZE", "false") === "true",
+        logging: config.get<string>("DB_LOG", "false") === "true",
+        migrations: [join(__dirname, "../typeorm/migrations/*{.ts,.js}")],
+        migrationsTableName: "migrations_typeorm",
       }),
     }),
     TypeOrmModule.forFeature([EventEntity, SubscriberEntity, DeliveryEntity]),
