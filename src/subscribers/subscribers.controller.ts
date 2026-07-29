@@ -10,7 +10,7 @@ import {
 } from "@nestjs/common";
 import { SubscribersService } from "./subscribers.service";
 import { CreateSubscriberDto, UpdateSubscriberDto } from "./dto/subscriber.dto";
-import { InternalAuthGuard } from "@src/auth/internal-auth.guard";
+import { InternalAuthGuard } from "api-server-toolkit/guard";
 
 @Controller()
 export class SubscribersController {

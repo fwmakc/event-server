@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import { EventsService } from "./events.service";
 import { PublishEventDto } from "./dto/publish-event.dto";
-import { InternalAuthGuard } from "@src/auth/internal-auth.guard";
+import { InternalAuthGuard } from "api-server-toolkit/guard";
 
 @Controller()
 export class EventsController {

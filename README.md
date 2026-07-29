@@ -671,7 +671,7 @@ export class SubscriptionService implements OnModuleInit {
 ## Docker
 
 ```yaml
-# docker-compose.yml (in gateway/)
+# docker-compose.yml (in gateway-server/)
 event-server:
   build:
     context: ..
