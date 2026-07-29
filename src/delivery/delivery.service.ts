@@ -17,14 +17,19 @@ export class DeliveryService {
   private readonly logger = new Logger(DeliveryService.name);
   private readonly apiKey: string;
   private readonly defaultTimeout: number;
+  private readonly circuitBreakerThreshold: number;
+  private readonly failureStreaks = new Map<number, number>();
 
   constructor(
     private readonly config: ConfigService,
     @InjectRepository(DeliveryEntity)
     private readonly deliveryRepo: Repository<DeliveryEntity>,
+    @InjectRepository(SubscriberEntity)
+    private readonly subscriberRepo: Repository<SubscriberEntity>,
   ) {
     this.apiKey = this.config.get<string>("INTERNAL_API_KEY", "changeme");
     this.defaultTimeout = Number(this.config.get("DEFAULT_HTTP_TIMEOUT_MS", 30000));
+    this.circuitBreakerThreshold = Number(this.config.get("CIRCUIT_BREAKER_THRESHOLD", 5));
   }
 
   async deliver(
@@ -75,6 +80,8 @@ export class DeliveryService {
           responseBody: body,
         });
 
+        this.failureStreaks.delete(delivery.subscriberId);
+
         this.logger.log(`Delivery ${delivery.id} to ${subscriber.service} succeeded (${response.status}, ${durationMs}ms)`);
 
         return {
@@ -85,7 +92,7 @@ export class DeliveryService {
         };
       }
 
-      await this.handleFailure(delivery, event, response.status, body, durationMs);
+      await this.handleFailure(delivery, event, subscriber, response.status, body, durationMs);
 
       return {
         status: "failed",
@@ -103,7 +110,7 @@ export class DeliveryService {
             : JSON.stringify(axiosErr.response.data))
         : axiosErr.message || "Connection error";
 
-      await this.handleFailure(delivery, event, code, body, durationMs);
+      await this.handleFailure(delivery, event, subscriber, code, body, durationMs);
 
       return {
         status: "failed",
@@ -117,6 +124,7 @@ export class DeliveryService {
   private async handleFailure(
     delivery: DeliveryEntity,
     event: EventEntity,
+    subscriber: SubscriberEntity,
     code: number | null,
     body: string,
     durationMs: number,
@@ -137,6 +145,8 @@ export class DeliveryService {
         `Delivery ${delivery.id} to subscriber ${delivery.subscriberId} FAILED permanently ` +
         `(attempt ${attemptNumber}/${delivery.maxAttempts}, code=${code}, ${durationMs}ms)`,
       );
+
+      await this.checkCircuitBreaker(subscriber);
     } else {
       const backoffMs = event.retryDelay * 1000 * Math.pow(2, attemptNumber - 1);
       const nextAttempt = new Date(Date.now() + backoffMs);
@@ -152,6 +162,20 @@ export class DeliveryService {
       this.logger.warn(
         `Delivery ${delivery.id} to subscriber ${delivery.subscriberId} failed ` +
         `(attempt ${attemptNumber}/${delivery.maxAttempts}, code=${code}), retry at ${nextAttempt.toISOString()}`,
+      );
+    }
+  }
+
+  private async checkCircuitBreaker(subscriber: SubscriberEntity): Promise<void> {
+    const streak = (this.failureStreaks.get(subscriber.id) ?? 0) + 1;
+    this.failureStreaks.set(subscriber.id, streak);
+
+    if (streak >= this.circuitBreakerThreshold) {
+      await this.subscriberRepo.update(subscriber.id, { active: false });
+      this.failureStreaks.delete(subscriber.id);
+      this.logger.warn(
+        `Circuit breaker: deactivated subscriber ${subscriber.service} (id=${subscriber.id}) ` +
+        `after ${streak} consecutive permanent failures`,
       );
     }
   }

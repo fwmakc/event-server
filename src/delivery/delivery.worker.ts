@@ -132,22 +132,41 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       .take(this.batchSize)
       .getMany();
 
-    for (const delivery of deliveries) {
-      const [event, subscriber] = await Promise.all([
-        this.eventRepo.findOne({ where: { id: delivery.eventId } }),
-        this.subscriberRepo.findOne({ where: { id: delivery.subscriberId } }),
-      ]);
+    if (deliveries.length === 0) return;
+
+    const eventIds = [...new Set(deliveries.map((d) => d.eventId))];
+    const subscriberIds = [...new Set(deliveries.map((d) => d.subscriberId))];
+
+    const [events, subscribers] = await Promise.all([
+      this.eventRepo
+        .createQueryBuilder("e")
+        .where("e.id IN (:...ids)", { ids: eventIds })
+        .getMany(),
+      this.subscriberRepo
+        .createQueryBuilder("sub")
+        .where("sub.id IN (:...ids)", { ids: subscriberIds })
+        .getMany(),
+    ]);
+
+    const eventMap = new Map(events.map((e) => [e.id, e]));
+    const subscriberMap = new Map(subscribers.map((s) => [s.id, s]));
+
+    const tasks = deliveries.map(async (delivery) => {
+      const event = eventMap.get(delivery.eventId);
+      const subscriber = subscriberMap.get(delivery.subscriberId);
 
       if (!event || !subscriber) {
         await this.deliveryRepo.update(delivery.id, {
           status: "failed",
           responseBody: "Event or subscriber no longer exists",
         });
-        continue;
+        return;
       }
 
       await this.deliveryService.deliver(event, subscriber, delivery);
-    }
+    });
+
+    await Promise.allSettled(tasks);
   }
 
   private async resolveEvents() {
