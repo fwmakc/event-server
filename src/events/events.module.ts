@@ -5,13 +5,14 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "@src/database/ent
 import { EventsController } from "./events.controller";
 import { EventsService } from "./events.service";
 import { DeliveryModule } from "@src/delivery/delivery.module";
+import { ContractsController } from "@src/contracts/contracts.controller";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([EventEntity, SubscriberEntity, DeliveryEntity]),
     DeliveryModule,
   ],
-  controllers: [EventsController],
+  controllers: [EventsController, ContractsController],
   providers: [EventsService, InternalAuthGuard],
   exports: [EventsService],
 })

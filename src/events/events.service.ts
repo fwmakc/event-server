@@ -1,9 +1,13 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { validate } from "class-validator";
+import { plainToInstance } from "class-transformer";
 import { EventEntity, SubscriberEntity, DeliveryEntity, DeliveryStatus } from "@src/database/entities";
 import { PublishEventDto } from "./dto/publish-event.dto";
 import { DeliveryService } from "@src/delivery/delivery.service";
+import { EventContracts } from "@src/contracts";
 
 export interface PublishResult {
   eventId: number;
@@ -22,8 +26,10 @@ export interface PublishResult {
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
+  private readonly strictMode: boolean;
 
   constructor(
+    private readonly config: ConfigService,
     @InjectRepository(EventEntity)
     private readonly eventRepo: Repository<EventEntity>,
     @InjectRepository(SubscriberEntity)
@@ -31,9 +37,25 @@ export class EventsService {
     @InjectRepository(DeliveryEntity)
     private readonly deliveryRepo: Repository<DeliveryEntity>,
     private readonly deliveryService: DeliveryService,
-  ) {}
+  ) {
+    this.strictMode = config.get<string>("EVENT_STRICT_MODE", "false") === "true";
+  }
 
   async publish(dto: PublishEventDto): Promise<PublishResult> {
+    const Schema = EventContracts[dto.pattern];
+    if (Schema) {
+      const instance = plainToInstance(Schema, dto.payload);
+      const errors = await validate(instance);
+      if (errors.length > 0) {
+        throw new BadRequestException({
+          message: `Invalid payload for pattern "${dto.pattern}"`,
+          errors: errors.map((e) => ({ property: e.property, constraints: e.constraints })),
+        });
+      }
+    } else if (this.strictMode) {
+      throw new BadRequestException(`Unknown event pattern: "${dto.pattern}"`);
+    }
+
     const now = new Date();
 
     const expiresAt = dto.ttl !== undefined && dto.ttl !== null && dto.ttl > 0
