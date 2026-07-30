@@ -12,13 +12,14 @@ import { DeliveryService } from "./delivery.service";
 @Injectable()
 export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeliveryWorker.name);
-  private deliveryTimer: NodeJS.Timeout;
-  private cleanupTimer: NodeJS.Timeout;
-  private running = false;
-
+  private deliveryTimer: NodeJS.Timeout | null = null;
+  private cleanupTimer: NodeJS.Timeout | null = null;
   private readonly workerInterval: number;
+  private readonly maxInterval: number;
   private readonly cleanupInterval: number;
   private readonly batchSize: number;
+  private currentDelay: number;
+  private destroyed = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -31,16 +32,14 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     private readonly deliveryRepo: Repository<DeliveryEntity>,
   ) {
     this.workerInterval = Number(this.config.get("WORKER_INTERVAL_MS", 2000));
+    this.maxInterval = Number(this.config.get("WORKER_MAX_INTERVAL_MS", this.workerInterval * 5));
     this.cleanupInterval = Number(this.config.get("CLEANUP_INTERVAL_MS", 3600000));
     this.batchSize = Number(this.config.get("BATCH_SIZE", 10));
+    this.currentDelay = this.workerInterval;
   }
 
   onModuleInit() {
-    this.deliveryTimer = setInterval(() => {
-      this.runDeliveryCycle().catch((err) =>
-        this.logger.error(`Delivery cycle error: ${err.message}`, err.stack),
-      );
-    }, this.workerInterval);
+    this.scheduleNextDelivery();
 
     this.cleanupTimer = setInterval(() => {
       this.runCleanupCycle().catch((err) =>
@@ -48,29 +47,48 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       );
     }, this.cleanupInterval);
 
-    this.logger.log(`Worker started (interval=${this.workerInterval}ms, batch=${this.batchSize})`);
+    this.logger.log(
+      `Worker started (interval=${this.workerInterval}-${this.maxInterval}ms adaptive, batch=${this.batchSize})`,
+    );
   }
 
   onModuleDestroy() {
-    clearInterval(this.deliveryTimer);
+    this.destroyed = true;
+    if (this.deliveryTimer) clearTimeout(this.deliveryTimer);
     clearInterval(this.cleanupTimer);
     this.logger.log("Worker stopped");
   }
 
-  private async runDeliveryCycle() {
-    if (this.running) return;
-    this.running = true;
+  private scheduleNextDelivery(): void {
+    if (this.destroyed) return;
+    this.deliveryTimer = setTimeout(async () => {
+      await this.runDeliveryCycle().catch((err) =>
+        this.logger.error(`Delivery cycle error: ${err.message}`, err.stack),
+      );
+      this.scheduleNextDelivery();
+    }, this.currentDelay);
+  }
 
-    try {
-      await this.processPendingEvents();
-      await this.processPendingDeliveries();
-      await this.resolveEvents();
-    } finally {
-      this.running = false;
+  private async runDeliveryCycle() {
+    const hadEvents = await this.processPendingEvents();
+    const hadDeliveries = await this.processPendingDeliveries();
+    await this.resolveEvents();
+
+    if (hadEvents || hadDeliveries) {
+      if (this.currentDelay !== this.workerInterval) {
+        this.logger.log(`Work found, resuming at ${this.workerInterval}ms`);
+      }
+      this.currentDelay = this.workerInterval;
+    } else {
+      const prev = this.currentDelay;
+      this.currentDelay = Math.min(this.currentDelay * 2, this.maxInterval);
+      if (prev !== this.currentDelay) {
+        this.logger.debug(`Idle, back off to ${this.currentDelay}ms`);
+      }
     }
   }
 
-  private async processPendingEvents() {
+  private async processPendingEvents(): Promise<boolean> {
     const now = new Date();
 
     const events = await this.eventRepo
@@ -90,6 +108,8 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     for (const event of events) {
       await this.createDeliveriesForEvent(event);
     }
+
+    return events.length > 0;
   }
 
   private async createDeliveriesForEvent(event: EventEntity) {
@@ -122,7 +142,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     await this.eventRepo.update(event.id, { status: "processing" });
   }
 
-  private async processPendingDeliveries() {
+  private async processPendingDeliveries(): Promise<boolean> {
     const now = new Date();
 
     const deliveries = await this.deliveryRepo
@@ -132,7 +152,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       .take(this.batchSize)
       .getMany();
 
-    if (deliveries.length === 0) return;
+    if (deliveries.length === 0) return false;
 
     const eventIds = [...new Set(deliveries.map((d) => d.eventId))];
     const subscriberIds = [...new Set(deliveries.map((d) => d.subscriberId))];
@@ -167,6 +187,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     });
 
     await Promise.allSettled(tasks);
+    return true;
   }
 
   private async resolveEvents() {
