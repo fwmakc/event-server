@@ -37,7 +37,7 @@ __decorate([
 ], ContractsController.prototype, "getCatalog", null);
 ContractsController = __decorate([
     (0, swagger_1.ApiTags)("Event Contracts"),
-    (0, common_1.Controller)("events")
+    (0, common_1.Controller)("contracts")
 ], ContractsController);
 exports.ContractsController = ContractsController;
 //# sourceMappingURL=contracts.controller.js.map

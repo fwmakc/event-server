@@ -9,7 +9,7 @@ import { UserDeletedDto } from "./dto/user-deleted.dto";
 import { WebhookEnvelopeDto } from "./dto/webhook-envelope.dto";
 
 @ApiTags("Event Contracts")
-@Controller("events")
+@Controller("contracts")
 export class ContractsController {
   @Get("catalog")
   @ApiOperation({ summary: "Реестр всех контрактов событий" })
