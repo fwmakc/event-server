@@ -6,7 +6,7 @@ import {
   Index,
 } from "typeorm";
 
-export type DeliveryStatus = "pending" | "delivered" | "failed";
+export type DeliveryStatus = "pending" | "processing" | "delivered" | "failed";
 
 @Entity("deliveries")
 @Index("idx_deliveries_status_next", ["status", "nextAttemptAt"])

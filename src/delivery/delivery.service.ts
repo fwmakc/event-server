@@ -152,6 +152,7 @@ export class DeliveryService {
       const nextAttempt = new Date(Date.now() + backoffMs);
 
       await this.deliveryRepo.update(delivery.id, {
+        status: "pending",
         attempts: attemptNumber,
         lastAttemptAt: new Date(),
         nextAttemptAt: nextAttempt,

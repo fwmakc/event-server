@@ -18,6 +18,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private readonly maxInterval: number;
   private readonly cleanupInterval: number;
   private readonly batchSize: number;
+  private readonly staleTimeout: number;
   private currentDelay: number;
   private destroyed = false;
 
@@ -35,6 +36,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     this.maxInterval = Number(this.config.get("WORKER_MAX_INTERVAL_MS", this.workerInterval * 5));
     this.cleanupInterval = Number(this.config.get("CLEANUP_INTERVAL_MS", 3600000));
     this.batchSize = Number(this.config.get("BATCH_SIZE", 10));
+    this.staleTimeout = Number(this.config.get("WORKER_STALE_TIMEOUT_MS", 300000));
     this.currentDelay = this.workerInterval;
   }
 
@@ -91,19 +93,36 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private async processPendingEvents(): Promise<boolean> {
     const now = new Date();
 
-    const events = await this.eventRepo
-      .createQueryBuilder("e")
-      .where("e.status = :status", { status: "pending" })
-      .andWhere("(e.deliverAfter IS NULL OR e.deliverAfter <= :now)", { now })
-      .orderBy(
-        `CASE e.priority 
-          WHEN 'high' THEN 0 
-          WHEN 'normal' THEN 1 
-          ELSE 2 END`,
-      )
-      .addOrderBy("e.createdAt", "ASC")
-      .take(this.batchSize)
-      .getMany();
+    const events = await this.eventRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(EventEntity);
+
+      const events = await repo
+        .createQueryBuilder("e")
+        .setLock("pessimistic_write")
+        .setOnLocked("skip_locked")
+        .where("e.status = :status", { status: "pending" })
+        .andWhere("(e.deliverAfter IS NULL OR e.deliverAfter <= :now)", { now })
+        .orderBy(
+          `CASE e.priority 
+            WHEN 'high' THEN 0 
+            WHEN 'normal' THEN 1 
+            ELSE 2 END`,
+        )
+        .addOrderBy("e.createdAt", "ASC")
+        .take(this.batchSize)
+        .getMany();
+
+      if (events.length > 0) {
+        await repo
+          .createQueryBuilder("e")
+          .update()
+          .set({ status: "processing" })
+          .where("e.id IN (:...ids)", { ids: events.map((e) => e.id) })
+          .execute();
+      }
+
+      return events;
+    });
 
     for (const event of events) {
       await this.createDeliveriesForEvent(event);
@@ -139,18 +158,38 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     await this.deliveryRepo.save(deliveries);
-    await this.eventRepo.update(event.id, { status: "processing" });
   }
 
   private async processPendingDeliveries(): Promise<boolean> {
     const now = new Date();
+    const staleBefore = new Date(Date.now() - this.staleTimeout);
 
-    const deliveries = await this.deliveryRepo
-      .createQueryBuilder("d")
-      .where("d.status = :status", { status: "pending" })
-      .andWhere("(d.nextAttemptAt IS NULL OR d.nextAttemptAt <= :now)", { now })
-      .take(this.batchSize)
-      .getMany();
+    const deliveries = await this.deliveryRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(DeliveryEntity);
+
+      const deliveries = await repo
+        .createQueryBuilder("d")
+        .setLock("pessimistic_write")
+        .setOnLocked("skip_locked")
+        .where(
+          `(d.status = 'pending' AND (d.nextAttemptAt IS NULL OR d.nextAttemptAt <= :now))
+           OR (d.status = 'processing' AND d.lastAttemptAt < :staleBefore)`,
+          { now, staleBefore },
+        )
+        .take(this.batchSize)
+        .getMany();
+
+      if (deliveries.length > 0) {
+        await repo
+          .createQueryBuilder("d")
+          .update()
+          .set({ status: "processing", lastAttemptAt: new Date() })
+          .where("d.id IN (:...ids)", { ids: deliveries.map((d) => d.id) })
+          .execute();
+      }
+
+      return deliveries;
+    });
 
     if (deliveries.length === 0) return false;
 
@@ -200,7 +239,9 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
         where: { eventId: event.id },
       });
 
-      const hasPending = deliveries.some((d) => d.status === "pending");
+      const hasPending = deliveries.some(
+        (d) => d.status === "pending" || d.status === "processing",
+      );
       if (hasPending) continue;
 
       const allDelivered = deliveries.every((d) => d.status === "delivered");
