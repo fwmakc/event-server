@@ -2,12 +2,20 @@ import { INestApplication } from "@nestjs/common";
 import * as request from "supertest";
 import { Repository } from "typeorm";
 import { getRepositoryToken } from "@nestjs/typeorm";
-import axios from "axios";
 import { EventEntity, DeliveryEntity } from "@src/database/entities";
 import { createTestApp } from "../app.testingModule";
 
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockFetch = jest.fn() as jest.Mock;
+global.fetch = mockFetch;
+
+function mockResponse(status: number, data: unknown) {
+  const body = typeof data === "string" ? data : JSON.stringify(data);
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    text: () => Promise.resolve(body),
+  };
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -52,10 +60,7 @@ describe("Worker — async delivery + retry + cleanup", () => {
   });
 
   beforeEach(() => {
-    mockedAxios.post.mockResolvedValue({
-      status: 200,
-      data: { ok: true },
-    } as any);
+    mockFetch.mockResolvedValue(mockResponse(200, { ok: true }));
   });
 
   afterEach(() => {

@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import axios, { AxiosError } from "axios";
+import { httpPost } from "api-server-toolkit/helper";
 import { EventEntity, SubscriberEntity, DeliveryEntity, DeliveryStatus } from "@src/database/entities";
 
 export interface DeliveryResult {
@@ -54,23 +54,21 @@ export class DeliveryService {
       : this.defaultTimeout;
 
     try {
-      const response = await axios.post(subscriber.url, payload, {
+      const response = await httpPost(subscriber.url, payload, {
         headers: {
-          "Content-Type": "application/json",
           "X-Internal-Api-Key": this.apiKey,
         },
         timeout: timeoutMs,
-        validateStatus: () => true,
+        raw: true,
       });
 
       const durationMs = Date.now() - startTime;
-      const isSuccess = response.status >= 200 && response.status < 300;
 
       const body = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data);
 
-      if (isSuccess) {
+      if (response.ok) {
         await this.deliveryRepo.update(delivery.id, {
           status: "delivered",
           attempts: attemptNumber,
@@ -102,19 +100,13 @@ export class DeliveryService {
       };
     } catch (err) {
       const durationMs = Date.now() - startTime;
-      const axiosErr = err as AxiosError;
-      const code = axiosErr.response?.status ?? null;
-      const body = axiosErr.response?.data
-        ? (typeof axiosErr.response.data === "string"
-            ? axiosErr.response.data
-            : JSON.stringify(axiosErr.response.data))
-        : axiosErr.message || "Connection error";
+      const body = err.message || "Connection error";
 
-      await this.handleFailure(delivery, event, subscriber, code, body, durationMs);
+      await this.handleFailure(delivery, event, subscriber, null, body, durationMs);
 
       return {
         status: "failed",
-        responseCode: code,
+        responseCode: null,
         responseBody: body,
         durationMs,
       };

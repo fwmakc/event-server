@@ -2,12 +2,20 @@ import { INestApplication } from "@nestjs/common";
 import * as request from "supertest";
 import { Repository } from "typeorm";
 import { getRepositoryToken } from "@nestjs/typeorm";
-import axios from "axios";
 import { DeliveryEntity } from "@src/database/entities";
 import { createTestApp } from "../app.testingModule";
 
-jest.mock("axios");
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockFetch = jest.fn() as jest.Mock;
+global.fetch = mockFetch;
+
+function mockResponse(status: number, data: unknown) {
+  const body = typeof data === "string" ? data : JSON.stringify(data);
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    text: () => Promise.resolve(body),
+  };
+}
 
 describe("Delivery — webhook delivery + retry", () => {
   let app: INestApplication;
@@ -16,10 +24,7 @@ describe("Delivery — webhook delivery + retry", () => {
   const headers = { "X-Internal-Api-Key": apiKey };
 
   beforeEach(() => {
-    mockedAxios.post.mockResolvedValue({
-      status: 200,
-      data: { ok: true },
-    } as any);
+    mockFetch.mockResolvedValue(mockResponse(200, { ok: true }));
   });
 
   afterEach(() => {
@@ -62,27 +67,27 @@ describe("Delivery — webhook delivery + retry", () => {
     expect(res.body.deliveries[0].status).toBe("delivered");
     expect(res.body.deliveries[0].responseCode).toBe(200);
 
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      "http://mock-service:9999/webhook",
+    const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+    expect(lastCall[0]).toBe("http://mock-service:9999/webhook");
+    expect(lastCall[1].method).toBe("POST");
+    expect(lastCall[1].headers).toEqual(
+      expect.objectContaining({
+        "X-Internal-Api-Key": "test-api-key",
+        "Content-Type": "application/json",
+      }),
+    );
+    const webhookBody = JSON.parse(lastCall[1].body);
+    expect(webhookBody).toEqual(
       expect.objectContaining({
         pattern: "delivery.test",
         payload: { msg: "hello" },
         source: "test",
       }),
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          "X-Internal-Api-Key": "test-api-key",
-          "Content-Type": "application/json",
-        }),
-      }),
     );
   });
 
   it("sync delivery: webhook returns 500 — marked failed", async () => {
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 500,
-      data: "Internal Server Error",
-    } as any);
+    mockFetch.mockResolvedValueOnce(mockResponse(500, "Internal Server Error"));
 
     const res = await request(app.getHttpServer())
       .post("/events")
@@ -102,7 +107,7 @@ describe("Delivery — webhook delivery + retry", () => {
   });
 
   it("sync delivery: connection error — marked failed", async () => {
-    mockedAxios.post.mockRejectedValueOnce(new Error("Connection refused"));
+    mockFetch.mockRejectedValueOnce(new Error("Connection refused"));
 
     const res = await request(app.getHttpServer())
       .post("/events")
@@ -132,8 +137,8 @@ describe("Delivery — webhook delivery + retry", () => {
         awaitResponse: true,
       });
 
-    const callArgs = mockedAxios.post.mock.calls[mockedAxios.post.mock.calls.length - 1];
-    const webhookBody = callArgs[1];
+    const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+    const webhookBody = JSON.parse(lastCall[1].body);
 
     expect(webhookBody).toHaveProperty("eventId");
     expect(webhookBody).toHaveProperty("pattern", "delivery.test");
@@ -144,10 +149,7 @@ describe("Delivery — webhook delivery + retry", () => {
   });
 
   it("delivery record stores responseCode and responseBody", async () => {
-    mockedAxios.post.mockResolvedValueOnce({
-      status: 201,
-      data: { created: true },
-    } as any);
+    mockFetch.mockResolvedValueOnce(mockResponse(201, { created: true }));
 
     const res = await request(app.getHttpServer())
       .post("/events")

@@ -2,16 +2,62 @@
 
 Standalone microservice for event-driven communication between services. Replaces Redis Streams event bus with HTTP-based publish/subscribe pattern.
 
-**Thin pipe**: receives events, routes to subscribers via webhooks. No business logic, no payload transformation, no domain knowledge.
+**Thin pipe**: receives events, routes to subscribers via webhooks. No business logic, no payload transformation, no domain knowledge. Includes a **schema registry** for type-safe event contracts.
 
 ```
 auth-server ──[POST /events]──> event-server ──[POST /webhook]──> message-server
                                    │
+                                   ├── validates payload (if EVENT_STRICT_MODE)
                                    ├── stores events (if log:true)
                                    ├── manages subscriptions
-                                   ├── delivers via HTTP with retry
+                                   ├── delivers via HTTP with retry + circuit breaker
                                    └── cleans up old data (TTL)
 ```
+
+---
+
+## Event Contracts (Schema Registry)
+
+Event-server owns all event contracts as typed DTOs, exported via the npm subpath `event-server/contracts`. Other services import these for type-safe publishing and consuming.
+
+### Available contracts
+
+| Pattern | DTO | Required fields |
+|---------|-----|-----------------|
+| `user.registered` | `UserRegisteredDto` | userId, username, email (+ subject?, confirmUrl?) |
+| `user.confirmed` | `UserConfirmedDto` | userId, username, email |
+| `password.reset` | `PasswordResetDto` | username, email, subject, resetUrl |
+| `user.deactivated` | `UserDeactivatedDto` | userId, username, email |
+| `user.deleted` | `UserDeletedDto` | userId, username, email |
+| *(webhook envelope)* | `WebhookEnvelopeDto` | eventId, pattern, payload, source, timestamp, attempt |
+
+### Importing contracts
+
+```typescript
+import { UserRegisteredDto, WebhookEnvelopeDto, EventContracts } from "event-server/contracts";
+```
+
+### Payload validation
+
+When `EVENT_STRICT_MODE=true`, incoming events with unknown patterns are rejected with HTTP 400. Registered DTOs provide Swagger documentation and optional validation.
+
+### Contract catalog
+
+```
+GET /contracts/catalog
+```
+
+Returns all registered event contracts with their DTO field definitions.
+
+### Building contracts
+
+Contracts are pre-compiled and committed to `dist/contracts/`:
+
+```bash
+npm run build:contracts   # compiles src/contracts/** → dist/contracts/
+```
+
+`tsconfig.contracts.json` compiles only the contracts directory (no NestJS dependencies, just class-validator/class-transformer). The `dist/contracts/` directory is committed despite `/dist/*` being gitignored.
 
 ---
 
@@ -415,6 +461,27 @@ HTTP 200
 }
 ```
 
+### GET /contracts/catalog — Event contract catalog
+
+Returns all registered event contracts with DTO field definitions:
+
+```json
+HTTP 200
+{
+  "contracts": [
+    {
+      "pattern": "user.registered",
+      "dto": "UserRegisteredDto",
+      "fields": [
+        { "name": "userId", "type": "number", "required": true },
+        { "name": "username", "type": "string", "required": true },
+        ...
+      ]
+    }
+  ]
+}
+```
+
 ### GET /health — Health check (no auth)
 
 ```json
@@ -474,13 +541,18 @@ Content-Type: application/json
    - Mark event as 'processing'
 
 3. For each pending delivery WHERE next_attempt_at <= NOW():
+   - Deliver to ALL matching subscribers **in parallel** (`Promise.allSettled`)
    - POST to subscriber.url (with X-Internal-Api-Key)
    - Timeout from event.timeout
    - 2xx -> status=delivered
    - non-2xx/timeout -> attempts++, next_attempt_at = NOW() + retryDelay * 2^attempts
-   - attempts >= max_attempts -> status=failed
+   - attempts >= max_attempts -> status=failed (permanent failure)
 
-4. If all deliveries for an event are resolved:
+4. **Circuit breaker:** After `CIRCUIT_BREAKER_THRESHOLD` (default: 5) permanent failures
+   for a subscriber, the subscriber is **auto-deactivated** (active=false). This prevents
+   event-server from endlessly retrying a dead endpoint.
+
+5. If all deliveries for an event are resolved:
    - Mark event as 'delivered' (if all succeeded) or 'failed' (if any failed)
 ```
 
@@ -511,10 +583,12 @@ DB_PORT=5432
 DB_NAME=event_server
 DB_USER=root
 DB_PASSWORD=1234
-DB_SYNCHRONIZE=true
+DB_SYNCHRONIZE=false                # set true for dev schema sync
 
 # Security
 INTERNAL_API_KEY=changeme
+EVENT_STRICT_MODE=false             # reject unknown event patterns (default: false)
+CIRCUIT_BREAKER_THRESHOLD=5         # permanent failures before subscriber deactivated
 
 # Worker
 WORKER_INTERVAL_MS=2000         # processing cycle (default: 2000 = 2s)
@@ -591,52 +665,80 @@ SWAGGER_VERSION=1.0
 
 ### Publishing events (from any service)
 
+**Recommended:** Use the toolkit's `IEventClient` for type-safe publishing with contract DTOs:
+
 ```typescript
 // Example: auth-server emitting user.registered
+import { IEventClient } from "api-server-toolkit/client";
+import { UserRegisteredDto } from "event-server/contracts";
+
+@Injectable()
+export class MethodsAccountService {
+  constructor(
+    @Inject(IEventClient) private readonly eventClient: IEventClient,
+  ) {}
+
+  async register(/* ... */) {
+    // ... create account ...
+
+    const payload: UserRegisteredDto = {
+      userId: account.id,
+      username: account.username,
+      email: account.username,
+      subject: "Registration Confirmation",
+      confirmUrl: `${process.env.FORM_CONFIRM}/${confirm.code}`,
+    };
+
+    await this.eventClient.publish({
+      pattern: "user.registered",
+      payload,
+      source: "auth-server",
+      broadcast: true,
+      log: true,
+      ttl: 30,
+      priority: "high",
+    });
+  }
+}
+```
+
+The `EventClientModule` from the toolkit handles the HTTP call to event-server with the `X-Internal-Api-Key` header automatically.
+
+**Alternative:** Raw HTTP call (for non-NestJS services):
+
+```typescript
 import axios from 'axios';
 
-async function emitUserRegistered(userId: number, email: string) {
-  await axios.post('http://event-server:3005/events', {
-    pattern: 'user.registered',
-    payload: { userId, email },
-    source: 'auth-server',
-    broadcast: true,
-    log: true,
-    ttl: 30,
-    priority: 'high',
-  }, {
-    headers: { 'X-Internal-Api-Key': process.env.INTERNAL_API_KEY },
-  });
-}
+await axios.post('http://event-server:3005/events', {
+  pattern: 'user.registered',
+  payload: { userId, email },
+  source: 'auth-server',
+  broadcast: true,
+}, {
+  headers: { 'X-Internal-Api-Key': process.env.INTERNAL_API_KEY },
+});
 ```
 
 ### Subscribing to events (webhook receiver)
 
 ```typescript
-// Example: message-server webhook controller
-import { Controller, Post, Headers, Param, Body, HttpException, HttpStatus } from '@nestjs/common';
+// Example: message-server webhook handler with typed contracts
+import { WebhookEnvelopeDto, UserRegisteredDto } from "event-server/contracts";
 
-@Controller('webhook')
-export class WebhookController {
-  @Post(':pattern')
-  async handleEvent(
-    @Headers('x-internal-api-key') apiKey: string,
-    @Body() body: { eventId: number; pattern: string; payload: any; source: string; attempt: number },
-  ) {
-    if (apiKey !== process.env.INTERNAL_API_KEY) {
-      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-    }
-
-    switch (body.pattern) {
+@Controller('webhooks')
+@UseGuards(InternalAuthGuard)
+export class WebhooksController {
+  @Post('events')
+  async handleEvent(@Body() event: WebhookEnvelopeDto) {
+    switch (event.pattern) {
       case 'user.registered':
-        await this.sendWelcomeEmail(body.payload);
+        await this.onUserRegistered(event.payload as UserRegisteredDto);
         break;
       case 'password.reset':
-        await this.sendPasswordResetEmail(body.payload);
+        await this.onPasswordReset(event.payload as PasswordResetDto);
         break;
     }
-
-    return { ok: true };
+    return { received: true };
   }
 }
 ```
@@ -686,7 +788,7 @@ event-server:
     - DB_NAME=event_server
     - DB_USER=root
     - DB_PASSWORD=1234
-    - DB_SYNCHRONIZE=true
+    - DB_SYNCHRONIZE=${DB_SYNCHRONIZE:-false}
     - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme}
     - WORKER_INTERVAL_MS=2000
     - CLEANUP_INTERVAL_MS=3600000
