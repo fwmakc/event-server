@@ -117,7 +117,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
           .createQueryBuilder("e")
           .update()
           .set({ status: "processing" })
-          .where("e.id IN (:...ids)", { ids: events.map((e) => e.id) })
+          .where("id IN (:...ids)", { ids: events.map((e) => e.id) })
           .execute();
       }
 
@@ -184,7 +184,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
           .createQueryBuilder("d")
           .update()
           .set({ status: "processing", lastAttemptAt: new Date() })
-          .where("d.id IN (:...ids)", { ids: deliveries.map((d) => d.id) })
+          .where("id IN (:...ids)", { ids: deliveries.map((d) => d.id) })
           .execute();
       }
 

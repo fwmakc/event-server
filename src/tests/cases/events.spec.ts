@@ -29,7 +29,7 @@ describe("Events — publish and query", () => {
         .set(headers)
         .send({
           pattern: "user.registered",
-          payload: { userId: 1, email: "test@example.com" },
+          payload: { userId: 1, username: "test@example.com", email: "test@example.com" },
           source: "auth-server",
         })
         .expect(200);
