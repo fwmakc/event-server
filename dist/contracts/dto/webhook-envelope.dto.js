@@ -14,6 +14,7 @@ const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class WebhookEnvelopeDto {
 }
+exports.WebhookEnvelopeDto = WebhookEnvelopeDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ description: "ID события в event-server" }),
     (0, class_validator_1.IsNumber)(),
@@ -25,7 +26,7 @@ __decorate([
     __metadata("design:type", String)
 ], WebhookEnvelopeDto.prototype, "pattern", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: "Domain payload события", type: "object" }),
+    (0, swagger_1.ApiProperty)({ description: "Domain payload события", type: Object }),
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], WebhookEnvelopeDto.prototype, "payload", void 0);
@@ -44,5 +45,4 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], WebhookEnvelopeDto.prototype, "attempt", void 0);
-exports.WebhookEnvelopeDto = WebhookEnvelopeDto;
 //# sourceMappingURL=webhook-envelope.dto.js.map

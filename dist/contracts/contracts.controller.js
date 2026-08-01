@@ -27,6 +27,7 @@ let ContractsController = class ContractsController {
         }));
     }
 };
+exports.ContractsController = ContractsController;
 __decorate([
     (0, common_1.Get)("catalog"),
     (0, swagger_1.ApiOperation)({ summary: "Реестр всех контрактов событий" }),
@@ -35,9 +36,8 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], ContractsController.prototype, "getCatalog", null);
-ContractsController = __decorate([
+exports.ContractsController = ContractsController = __decorate([
     (0, swagger_1.ApiTags)("Event Contracts"),
     (0, common_1.Controller)("contracts")
 ], ContractsController);
-exports.ContractsController = ContractsController;
 //# sourceMappingURL=contracts.controller.js.map

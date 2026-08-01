@@ -14,6 +14,7 @@ const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class UserRegisteredDto {
 }
+exports.UserRegisteredDto = UserRegisteredDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ description: "Account ID" }),
     (0, class_validator_1.IsNumber)(),
@@ -41,5 +42,4 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UserRegisteredDto.prototype, "confirmUrl", void 0);
-exports.UserRegisteredDto = UserRegisteredDto;
 //# sourceMappingURL=user-registered.dto.js.map

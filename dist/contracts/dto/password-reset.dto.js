@@ -14,6 +14,7 @@ const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class PasswordResetDto {
 }
+exports.PasswordResetDto = PasswordResetDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ description: "Username (email)" }),
     (0, class_validator_1.IsString)(),
@@ -34,5 +35,4 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PasswordResetDto.prototype, "resetUrl", void 0);
-exports.PasswordResetDto = PasswordResetDto;
 //# sourceMappingURL=password-reset.dto.js.map

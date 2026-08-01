@@ -10,7 +10,7 @@ export class WebhookEnvelopeDto {
   @IsString()
   pattern: string;
 
-  @ApiProperty({ description: "Domain payload события", type: "object" })
+  @ApiProperty({ description: "Domain payload события", type: Object })
   @IsObject()
   payload: Record<string, any>;
 
