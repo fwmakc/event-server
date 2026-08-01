@@ -806,6 +806,27 @@ GRANT ALL PRIVILEGES ON DATABASE event_server TO $POSTGRES_USER;
 
 ---
 
+## Why HTTP webhook bus?
+
+The event-server uses HTTP webhooks for delivery — no message broker to install, operate,
+or debug. Subscribers register a URL, event-server POSTs events to it.
+
+**When to migrate:** ~1000 events/sec or when you need persistence guarantees beyond the
+delivery table. Replace event-server with:
+- **NATS JetStream** — lightweight, persistent, at-least-once delivery
+- **Redis Streams** — if you already run Redis
+
+**Broker replacement does NOT affect domain services.** They already expose webhook
+endpoints — only the event-server changes.
+
+## AI-friendly documentation
+
+- Swagger UI at `/swagger` — interactive API exploration
+- ReDoc at `/redoc` — readable API documentation
+- Event contracts catalog at `GET /contracts/catalog`
+
+---
+
 ## Port assignments
 
 | Service | Port |
