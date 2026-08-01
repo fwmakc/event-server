@@ -1,15 +1,32 @@
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import * as Sentry from "@sentry/nestjs";
+import redoc from "redoc-express";
+import helmet from "helmet";
 import { AppModule } from "@src/app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: console,
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.SENTRY_ENV || "localhost",
   });
 
-  app.useGlobalPipes(new ValidationPipe({ transform: true }));
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: ["error", "warn", "log"],
+  });
+
+  app.use(helmet());
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
   app.set("json spaces", 2);
 
   if (process.env.SWAGGER_PREFIX) {
@@ -24,18 +41,30 @@ async function bootstrap() {
     SwaggerModule.setup(process.env.SWAGGER_PREFIX, app, document);
   }
 
+  if (process.env.SWAGGER_PREFIX_REDOC) {
+    const redocConfig = {
+      title: process.env.SWAGGER_TITLE || "Event Server API",
+      version: process.env.SWAGGER_VERSION || "1.0",
+      specUrl: `${process.env.SWAGGER_PREFIX}-json`,
+    };
+    app.use(`${process.env.SWAGGER_PREFIX_REDOC}`, redoc(redocConfig));
+  }
+
   const port = process.env.PORT || 3005;
   const ip = process.env.IP || "localhost";
+  const logger = new Logger("Bootstrap");
 
-  await app.listen(port, ip).then(() => {
-    console.log(
-      `Event server running\nin ${process.env.NODE_ENV || "development"} mode\non port ${port}\nat http://${ip}:${port}`,
-    );
-  });
+  await app.listen(port, ip);
+  logger.log(
+    `Event server running in ${process.env.NODE_ENV || "development"} mode on port ${port} at http://${ip}:${port}`,
+  );
 
   process.on("SIGINT", () => {
     app.close();
   });
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error("Failed to start event server:", err);
+  process.exit(1);
+});

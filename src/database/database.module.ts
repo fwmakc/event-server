@@ -15,7 +15,7 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "./entities";
         host: config.get<string>("DB_HOST", "localhost"),
         port: Number(config.get("DB_PORT", 5432)),
         username: config.get<string>("DB_USER", "root"),
-        password: config.get<string>("DB_PASSWORD", "1234"),
+        password: config.get<string>("DB_PASSWORD"),
         database: config.get<string>("DB_NAME", "event_server"),
         entities: [EventEntity, SubscriberEntity, DeliveryEntity],
         synchronize: config.get<string>("DB_SYNCHRONIZE", "false") === "true",

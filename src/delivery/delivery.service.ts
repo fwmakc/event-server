@@ -50,7 +50,7 @@ export class DeliveryService {
     };
 
     const timeoutMs = event.timeout
-      ? Math.min(event.timeout * 1000, this.defaultTimeout)
+      ? event.timeout * 1000
       : this.defaultTimeout;
 
     try {
