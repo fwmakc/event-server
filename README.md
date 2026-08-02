@@ -819,11 +819,56 @@ delivery table. Replace event-server with:
 **Broker replacement does NOT affect domain services.** They already expose webhook
 endpoints — only the event-server changes.
 
-## AI-friendly documentation
+## AI-Friendly Documentation
 
-- Swagger UI at `/swagger` — interactive API exploration
-- ReDoc at `/redoc` — readable API documentation
-- Event contracts catalog at `GET /contracts/catalog`
+This service is designed for AI-assisted development. You can feed context
+to any LLM (ChatGPT, Claude, Cursor, Copilot) and get code that follows
+all conventions — without reading the entire codebase.
+
+### ai-context.md
+Auto-generated structured reference: every controller, route, service,
+entity, and DTO. Run `npm run ai-context` to regenerate.
+
+### Event contracts catalog
+Browse available event patterns and payloads at `GET /contracts/catalog` —
+or explore the typed DTOs in [dist/contracts/](dist/contracts/).
+
+### Swagger UI
+Interactive API exploration at `/swagger` — publish test events, register
+subscribers, inspect delivery status.
+
+### ReDoc
+Clean, readable documentation at `/redoc` — share with your team.
+
+### Why this matters
+An LLM with `ai-context.md` + the event contract DTOs can generate correct
+publish/subscribe code — event patterns, payload shapes, retry logic —
+without reading the source. The contracts ARE the documentation.
+
+## Backend-Only — Bring Your Own Frontend
+
+This service is internal infrastructure — the frontend never talks to
+event-server directly. Your services publish events via HTTP POST;
+event-server delivers them to subscribers via webhooks.
+
+All APIs are REST + JSON. Integrate with any backend language: Node.js,
+Python, Go, Java, PHP — anything that can receive an HTTP webhook.
+
+## Integrating into existing infrastructure
+
+Already have an event system? You can adopt event-server selectively:
+
+- **Already have Kafka/RabbitMQ/NATS?** Keep your existing broker for
+  high-volume streams. Use event-server for domain events that need
+  HTTP webhooks (user.registered, password.reset) — it's simpler to
+  integrate with services that already expose HTTP endpoints.
+- **Migrating from a monolith?** Extract event publishing one event at
+  a time. Your monolith already has webhook endpoints (or can add them) —
+  point event-server at them and gradually move publishers from inline
+  calls to `POST /events`.
+- **Need to replace event-server?** Domain services don't change — they
+  already expose webhook endpoints. Swap event-server for NATS JetStream
+  or Redis Streams; only the delivery mechanism changes.
 
 ---
 
