@@ -2,7 +2,24 @@
   "name": "event-server",
   "version": "2.0.0",
   "description": "Central event broker — webhook-based publish/subscribe",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "github:fwmakc/event-server"
+  },
+  "keywords": [
+    "nestjs",
+    "events",
+    "webhook",
+    "pubsub",
+    "event-driven",
+    "message-bus"
+  ],
+  "bugs": {
+    "url": "https://github.com/fwmakc/event-server/issues"
+  },
+  "homepage": "https://github.com/fwmakc/event-server#readme",
   "license": "MIT",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

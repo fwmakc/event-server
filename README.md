@@ -1,5 +1,9 @@
 # Event Server — Central Event Broker
 
+[![Tests](https://github.com/fwmakc/event-server/actions/workflows/test.yml/badge.svg)](https://github.com/fwmakc/event-server/actions/workflows/test.yml)
+[![Version](https://img.shields.io/badge/version-v2.0.0-blue)](https://github.com/fwmakc/event-server/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fwmakc/event-server/blob/main/LICENSE)
+
 > Webhook-based publish/subscribe event broker with retry, circuit breaker, and typed contracts.
 
 ## What This Is
