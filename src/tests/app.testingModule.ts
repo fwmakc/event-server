@@ -6,7 +6,7 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "@src/database/ent
 import { EventsModule } from "@src/events/events.module";
 import { SubscribersModule } from "@src/subscribers/subscribers.module";
 import { DeliveryModule } from "@src/delivery/delivery.module";
-import { HealthModule } from "@src/health/health.module";
+import { HealthModule } from "api-server-toolkit/health";
 
 export const createTestModule = async (): Promise<TestingModule> => {
   process.env.INTERNAL_API_KEY = "test-api-key";
@@ -30,7 +30,7 @@ export const createTestModule = async (): Promise<TestingModule> => {
       DeliveryModule,
       EventsModule,
       SubscribersModule,
-      HealthModule,
+      HealthModule.forRoot("event-server"),
     ],
   }).compile();
 

@@ -22,6 +22,7 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "./entities";
         logging: config.get<string>("DB_LOG", "false") === "true",
         migrations: [join(__dirname, "../typeorm/migrations/*{.ts,.js}")],
         migrationsTableName: "migrations_typeorm",
+        migrationsRun: config.get<string>("DB_MIGRATIONS_RUN", "false") === "true",
       }),
     }),
     TypeOrmModule.forFeature([EventEntity, SubscriberEntity, DeliveryEntity]),
