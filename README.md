@@ -1,8 +1,19 @@
 # Event Server — Central Event Broker
 
-Standalone microservice for event-driven communication between services. Replaces Redis Streams event bus with HTTP-based publish/subscribe pattern.
+> Webhook-based publish/subscribe event broker with retry, circuit breaker, and typed contracts.
 
-**Thin pipe**: receives events, routes to subscribers via webhooks. No business logic, no payload transformation, no domain knowledge. Includes a **schema registry** for type-safe event contracts.
+## What This Is
+
+A **working scaffold** — not a demo, not a toy. Production-ready event broker
+that receives events via HTTP POST and delivers them to subscribers via webhooks.
+Includes retry with exponential backoff, circuit breaker (auto-deactivate after
+5 failures), and typed event contracts (DTOs with validation).
+
+Part of a [microservices stack](https://github.com/fwmakc/gateway-server) —
+any service can publish events; subscribers register webhook URLs and receive
+deliveries.
+
+**Thin pipe**: receives events, routes to subscribers via webhooks. No business logic, no payload transformation, no domain knowledge.
 
 ```
 auth-server ──[POST /events]──> event-server ──[POST /webhook]──> message-server
@@ -770,7 +781,18 @@ export class SubscriptionService implements OnModuleInit {
 
 ---
 
-## Docker
+## Quick start
+
+```bash
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Event server runs on port **3005**.
+Swagger UI at `http://localhost:3005/swagger`.
+
+### Docker
 
 ```yaml
 # docker-compose.yml (in gateway-server/)
@@ -869,6 +891,17 @@ Already have an event system? You can adopt event-server selectively:
 - **Need to replace event-server?** Domain services don't change — they
   already expose webhook endpoints. Swap event-server for NATS JetStream
   or Redis Streams; only the delivery mechanism changes.
+
+## Related Services
+
+| Service | Role | Repo |
+|---------|------|------|
+| auth-server | Publishes auth events (user.registered, password.reset) | [fwmakc/auth-server](https://github.com/fwmakc/auth-server) |
+| api-server | Publishes domain events | [fwmakc/api-server](https://github.com/fwmakc/api-server) |
+| message-server | Subscribes to events → sends email | [fwmakc/message-server](https://github.com/fwmakc/message-server) |
+| api-server-toolkit | Shared library (InternalAuthGuard, httpPost) | [fwmakc/api-server-toolkit](https://github.com/fwmakc/api-server-toolkit) |
+| gateway-server | Nginx reverse proxy + Docker Compose | [fwmakc/gateway-server](https://github.com/fwmakc/gateway-server) |
+| scaffold | Template for new services | [fwmakc/scaffold](https://github.com/fwmakc/scaffold) |
 
 ---
 
