@@ -234,10 +234,33 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       where: { status: "processing" },
     });
 
+    if (processingEvents.length === 0) return;
+
+    const eventIds = processingEvents.map((e) => e.id);
+
+    const allDeliveries = await this.deliveryRepo
+      .createQueryBuilder("d")
+      .select(["d.id", "d.eventId", "d.status"])
+      .where("d.eventId IN (:...eventIds)", { eventIds })
+      .getMany();
+
+    const deliveriesByEvent = new Map<number, { id: number; status: string }[]>();
+    for (const d of allDeliveries) {
+      const list = deliveriesByEvent.get(d.eventId);
+      if (list) {
+        list.push({ id: d.id, status: d.status });
+      } else {
+        deliveriesByEvent.set(d.eventId, [{ id: d.id, status: d.status }]);
+      }
+    }
+
+    const deliveredIds: number[] = [];
+    const failedIds: number[] = [];
+    const eventsToDelete: number[] = [];
+    const deliveriesToDelete: number[] = [];
+
     for (const event of processingEvents) {
-      const deliveries = await this.deliveryRepo.find({
-        where: { eventId: event.id },
-      });
+      const deliveries = deliveriesByEvent.get(event.id) ?? [];
 
       const hasPending = deliveries.some(
         (d) => d.status === "pending" || d.status === "processing",
@@ -245,16 +268,52 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       if (hasPending) continue;
 
       const allDelivered = deliveries.every((d) => d.status === "delivered");
-      const newStatus = allDelivered ? "delivered" : "failed";
 
-      await this.eventRepo.update(event.id, { status: newStatus });
-
-      if (event.log === false || event.ttl === 0) {
-        await this.deliveryRepo.delete({ eventId: event.id });
-        if (event.log === false) {
-          await this.eventRepo.delete(event.id);
+      if (event.log === false) {
+        eventsToDelete.push(event.id);
+        deliveriesToDelete.push(...deliveries.map((d) => d.id));
+      } else {
+        if (allDelivered) {
+          deliveredIds.push(event.id);
+        } else {
+          failedIds.push(event.id);
+        }
+        if (event.ttl === 0) {
+          deliveriesToDelete.push(...deliveries.map((d) => d.id));
         }
       }
+    }
+
+    if (deliveredIds.length > 0) {
+      await this.eventRepo
+        .createQueryBuilder()
+        .update()
+        .set({ status: "delivered" })
+        .where("id IN (:...ids)", { ids: deliveredIds })
+        .execute();
+    }
+    if (failedIds.length > 0) {
+      await this.eventRepo
+        .createQueryBuilder()
+        .update()
+        .set({ status: "failed" })
+        .where("id IN (:...ids)", { ids: failedIds })
+        .execute();
+    }
+
+    if (deliveriesToDelete.length > 0) {
+      await this.deliveryRepo
+        .createQueryBuilder()
+        .delete()
+        .where("id IN (:...ids)", { ids: deliveriesToDelete })
+        .execute();
+    }
+    if (eventsToDelete.length > 0) {
+      await this.eventRepo
+        .createQueryBuilder()
+        .delete()
+        .where("id IN (:...ids)", { ids: eventsToDelete })
+        .execute();
     }
   }
 

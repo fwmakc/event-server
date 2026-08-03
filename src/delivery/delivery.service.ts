@@ -18,7 +18,6 @@ export class DeliveryService {
   private readonly apiKey: string;
   private readonly defaultTimeout: number;
   private readonly circuitBreakerThreshold: number;
-  private readonly failureStreaks = new Map<number, number>();
 
   constructor(
     private readonly config: ConfigService,
@@ -78,7 +77,12 @@ export class DeliveryService {
           responseBody: body,
         });
 
-        this.failureStreaks.delete(delivery.subscriberId);
+        await this.subscriberRepo
+          .createQueryBuilder()
+          .update()
+          .set({ failureStreak: 0 })
+          .where("id = :id AND failure_streak > 0", { id: delivery.subscriberId })
+          .execute();
 
         this.logger.log(`Delivery ${delivery.id} to ${subscriber.service} succeeded (${response.status}, ${durationMs}ms)`);
 
@@ -160,15 +164,21 @@ export class DeliveryService {
   }
 
   private async checkCircuitBreaker(subscriber: SubscriberEntity): Promise<void> {
-    const streak = (this.failureStreaks.get(subscriber.id) ?? 0) + 1;
-    this.failureStreaks.set(subscriber.id, streak);
+    const result = await this.subscriberRepo
+      .createQueryBuilder()
+      .update()
+      .set({ failureStreak: () => "failure_streak + 1" })
+      .where("id = :id", { id: subscriber.id })
+      .returning("failure_streak")
+      .execute();
 
-    if (streak >= this.circuitBreakerThreshold) {
-      await this.subscriberRepo.update(subscriber.id, { active: false });
-      this.failureStreaks.delete(subscriber.id);
+    const newStreak: number = result.raw[0]?.failure_streak ?? 0;
+
+    if (newStreak >= this.circuitBreakerThreshold) {
+      await this.subscriberRepo.update(subscriber.id, { active: false, failureStreak: 0 });
       this.logger.warn(
         `Circuit breaker: deactivated subscriber ${subscriber.service} (id=${subscriber.id}) ` +
-        `after ${streak} consecutive permanent failures`,
+        `after ${newStreak} consecutive permanent failures`,
       );
     }
   }

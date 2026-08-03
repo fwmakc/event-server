@@ -25,6 +25,9 @@ export class SubscriberEntity {
   @Column({ type: "boolean", default: true })
   active: boolean;
 
+  @Column({ name: "failure_streak", type: "int", default: 0 })
+  failureStreak: number;
+
   @CreateDateColumn({ name: "created_at" })
   createdAt: Date;
 

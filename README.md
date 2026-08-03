@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-v0.5.0-blue)](https://github.com/fwmakc/event-server/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fwmakc/event-server/blob/main/LICENSE)
 
-> Webhook-based publish/subscribe event broker with retry, circuit breaker, and typed contracts.
+> Reference implementation: event bus pattern — pluggable transport (HTTP now, Kafka/Redis ready), typed contracts, circuit breaker.
 
 ## What This Is
 
@@ -28,6 +28,19 @@ auth-server ──[POST /events]──> event-server ──[POST /webhook]──
                                    ├── delivers via HTTP with retry + circuit breaker
                                    └── cleans up old data (TTL)
 ```
+
+---
+
+## Pattern
+
+This service demonstrates the **event bus pattern** in the toolkit stack:
+
+- **Pluggable transport** — `IEventClient` abstraction, `HttpEventClient` now, Kafka/Redis later
+- **Typed contracts** — DTOs with validation, shared via `event-server/contracts` subpath
+- **Circuit breaker** — auto-deactivate subscriber after 5 permanent failures
+- **Thin pipe** — receives events, routes to subscribers, no business logic
+
+Clone this when you need: service-to-service communication without tight coupling.
 
 ---
 
@@ -599,6 +612,7 @@ DB_NAME=event_server
 DB_USER=root
 DB_PASSWORD=1234
 DB_SYNCHRONIZE=false                # set true for dev schema sync
+DB_POOL_MAX=20                      # connection pool size (raise for high throughput)
 
 # Security
 INTERNAL_API_KEY=changeme
@@ -844,6 +858,32 @@ delivery table. Replace event-server with:
 
 **Broker replacement does NOT affect domain services.** They already expose webhook
 endpoints — only the event-server changes.
+
+## Throughput Tuning
+
+Default config yields ~5 events/sec (`BATCH_SIZE=10`, `WORKER_INTERVAL_MS=2000`).
+The bottleneck is the polling interval, not HTTP latency.
+
+| Target | Config | Notes |
+|--------|--------|-------|
+| 50 ev/s | `BATCH_SIZE=50`, `WORKER_INTERVAL_MS=1000` | Single instance |
+| 200 ev/s | `BATCH_SIZE=200`, `WORKER_INTERVAL_MS=500`, `DB_POOL_MAX=30` | Single instance |
+| 500+ ev/s | Above + 3-5 worker replicas | `SKIP LOCKED` ensures no duplicate processing |
+| 1000+ ev/s | Switch to `KafkaEventClient` | `IEventClient` interface is transport-agnostic |
+
+### Horizontal scaling
+
+Run N replicas of event-server behind Docker Compose. `SKIP LOCKED` row locking
+(`delivery.worker.ts:101-102`) ensures each event is claimed by exactly one worker:
+
+```yaml
+services:
+  event-server:
+    deploy:
+      replicas: 3
+```
+
+No code changes needed — workers coordinate via the database.
 
 ## AI-Friendly Documentation
 
