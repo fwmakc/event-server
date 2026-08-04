@@ -612,7 +612,7 @@ DB_NAME=event_server
 DB_USER=root
 DB_PASSWORD=1234
 DB_SYNCHRONIZE=false                # set true for dev schema sync
-DB_POOL_MAX=20                      # connection pool size (raise for high throughput)
+DB_POOL_MAX=50                      # connection pool size
 
 # Security
 INTERNAL_API_KEY=changeme
@@ -620,12 +620,13 @@ EVENT_STRICT_MODE=false             # reject unknown event patterns (default: fa
 CIRCUIT_BREAKER_THRESHOLD=5         # permanent failures before subscriber deactivated
 
 # Worker
-WORKER_INTERVAL_MS=2000         # processing cycle (default: 2000 = 2s)
+WORKER_INTERVAL_MS=500          # processing cycle (default: 500ms)
+WORKER_MAX_INTERVAL_MS=2000     # adaptive backoff ceiling
 CLEANUP_INTERVAL_MS=3600000     # TTL cleanup cycle (default: 3600000 = 1h)
-BATCH_SIZE=10                   # max events per cycle
+BATCH_SIZE=50                   # max events/deliveries per cycle
 
 # HTTP client (webhook delivery)
-DEFAULT_HTTP_TIMEOUT_MS=30000   # default timeout (overridden by event.timeout)
+DEFAULT_HTTP_TIMEOUT_MS=10000   # default timeout (overridden by event.timeout)
 
 # Swagger (optional)
 SWAGGER_PREFIX=docs
@@ -830,9 +831,12 @@ event-server:
     - DB_PASSWORD=1234
     - DB_SYNCHRONIZE=${DB_SYNCHRONIZE:-false}
     - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme}
-    - WORKER_INTERVAL_MS=2000
+    - WORKER_INTERVAL_MS=500
+    - WORKER_MAX_INTERVAL_MS=2000
     - CLEANUP_INTERVAL_MS=3600000
-    - BATCH_SIZE=10
+    - BATCH_SIZE=50
+    - DEFAULT_HTTP_TIMEOUT_MS=10000
+    - DB_POOL_MAX=50
   depends_on:
     - postgres
   restart: unless-stopped
