@@ -32,10 +32,10 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(DeliveryEntity)
     private readonly deliveryRepo: Repository<DeliveryEntity>,
   ) {
-    this.workerInterval = Number(this.config.get("WORKER_INTERVAL_MS", 2000));
-    this.maxInterval = Number(this.config.get("WORKER_MAX_INTERVAL_MS", this.workerInterval * 5));
+    this.workerInterval = Number(this.config.get("WORKER_INTERVAL_MS", 500));
+    this.maxInterval = Number(this.config.get("WORKER_MAX_INTERVAL_MS", 2000));
     this.cleanupInterval = Number(this.config.get("CLEANUP_INTERVAL_MS", 3600000));
-    this.batchSize = Number(this.config.get("BATCH_SIZE", 10));
+    this.batchSize = Number(this.config.get("BATCH_SIZE", 50));
     this.staleTimeout = Number(this.config.get("WORKER_STALE_TIMEOUT_MS", 300000));
     this.currentDelay = this.workerInterval;
   }
@@ -74,9 +74,9 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private async runDeliveryCycle() {
     const hadEvents = await this.processPendingEvents();
     const hadDeliveries = await this.processPendingDeliveries();
-    await this.resolveEvents();
 
     if (hadEvents || hadDeliveries) {
+      await this.resolveEvents();
       if (this.currentDelay !== this.workerInterval) {
         this.logger.log(`Work found, resuming at ${this.workerInterval}ms`);
       }
@@ -124,19 +124,31 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       return events;
     });
 
-    for (const event of events) {
-      await this.createDeliveriesForEvent(event);
-    }
+    const subscriberCache = new Map<string, SubscriberEntity[]>();
+
+    await Promise.all(
+      events.map((event) => this.createDeliveriesForEvent(event, subscriberCache)),
+    );
 
     return events.length > 0;
   }
 
-  private async createDeliveriesForEvent(event: EventEntity) {
-    const subscribers = await this.subscriberRepo
-      .createQueryBuilder("sub")
-      .where(":pattern = ANY(sub.patterns)", { pattern: event.pattern })
-      .andWhere("sub.active = :active", { active: true })
-      .getMany();
+  private async createDeliveriesForEvent(
+    event: EventEntity,
+    subscriberCache?: Map<string, SubscriberEntity[]>,
+  ) {
+    let subscribers: SubscriberEntity[];
+
+    if (subscriberCache && subscriberCache.has(event.pattern)) {
+      subscribers = subscriberCache.get(event.pattern)!;
+    } else {
+      subscribers = await this.subscriberRepo
+        .createQueryBuilder("sub")
+        .where("sub.patterns @> ARRAY[:pattern]::text[]", { pattern: event.pattern })
+        .andWhere("sub.active = :active", { active: true })
+        .getMany();
+      if (subscriberCache) subscriberCache.set(event.pattern, subscribers);
+    }
 
     if (subscribers.length === 0) {
       await this.eventRepo.update(event.id, { status: "delivered" });
@@ -232,6 +244,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private async resolveEvents() {
     const processingEvents = await this.eventRepo.find({
       where: { status: "processing" },
+      take: 500,
     });
 
     if (processingEvents.length === 0) return;

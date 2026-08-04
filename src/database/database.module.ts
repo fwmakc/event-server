@@ -21,7 +21,7 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "./entities";
         synchronize: config.get<string>("DB_SYNCHRONIZE", "false") === "true",
         logging: config.get<string>("DB_LOG", "false") === "true",
         extra: {
-          max: Number(config.get<string>("DB_POOL_MAX", "20")),
+          max: Number(config.get<string>("DB_POOL_MAX", "50")),
         },
         migrations: [join(__dirname, "../typeorm/migrations/*{.ts,.js}")],
         migrationsTableName: "migrations_typeorm",

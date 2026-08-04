@@ -27,7 +27,7 @@ export class DeliveryService {
     private readonly subscriberRepo: Repository<SubscriberEntity>,
   ) {
     this.apiKey = this.config.get<string>("INTERNAL_API_KEY", "changeme");
-    this.defaultTimeout = Number(this.config.get("DEFAULT_HTTP_TIMEOUT_MS", 30000));
+    this.defaultTimeout = Number(this.config.get("DEFAULT_HTTP_TIMEOUT_MS", 10000));
     this.circuitBreakerThreshold = Number(this.config.get("CIRCUIT_BREAKER_THRESHOLD", 5));
   }
 
@@ -88,6 +88,37 @@ export class DeliveryService {
 
         return {
           status: "delivered",
+          responseCode: response.status,
+          responseBody: body,
+          durationMs,
+        };
+      }
+
+      const isPermanent4xx =
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 408 &&
+        response.status !== 429;
+
+      if (isPermanent4xx) {
+        await this.deliveryRepo.update(delivery.id, {
+          status: "failed",
+          attempts: attemptNumber,
+          lastAttemptAt: new Date(),
+          nextAttemptAt: null,
+          responseCode: response.status,
+          responseBody: body,
+        });
+
+        this.logger.warn(
+          `Delivery ${delivery.id} to subscriber ${delivery.subscriberId} FAILED permanently ` +
+          `(4xx ${response.status}, ${durationMs}ms)`,
+        );
+
+        await this.checkCircuitBreaker(subscriber);
+
+        return {
+          status: "failed",
           responseCode: response.status,
           responseBody: body,
           durationMs,

@@ -111,28 +111,28 @@ export class EventsService {
       ? subscribers
       : [subscribers[Math.floor(Math.random() * subscribers.length)]];
 
-    const results: PublishResult["deliveries"] = [];
+    const results = await Promise.all(
+      targets.map(async (sub) => {
+        const delivery = this.deliveryRepo.create({
+          eventId: event.id,
+          subscriberId: sub.id,
+          status: "pending",
+          attempts: 0,
+          maxAttempts: event.maxAttempts,
+        });
+        const savedDelivery = await this.deliveryRepo.save(delivery);
 
-    for (const sub of targets) {
-      const delivery = this.deliveryRepo.create({
-        eventId: event.id,
-        subscriberId: sub.id,
-        status: "pending",
-        attempts: 0,
-        maxAttempts: event.maxAttempts,
-      });
-      const savedDelivery = await this.deliveryRepo.save(delivery);
-
-      const result = await this.deliveryService.deliver(event, sub, savedDelivery);
-      results.push({
-        subscriberId: sub.id,
-        service: sub.service,
-        status: result.status,
-        responseCode: result.responseCode,
-        responseBody: result.responseBody,
-        durationMs: result.durationMs,
-      });
-    }
+        const result = await this.deliveryService.deliver(event, sub, savedDelivery);
+        return {
+          subscriberId: sub.id,
+          service: sub.service,
+          status: result.status,
+          responseCode: result.responseCode,
+          responseBody: result.responseBody,
+          durationMs: result.durationMs,
+        };
+      }),
+    );
 
     const allDelivered = results.every((r) => r.status === "delivered");
     const eventStatus = allDelivered ? "delivered" : "failed";
@@ -148,7 +148,7 @@ export class EventsService {
   async findMatchingSubscribers(pattern: string): Promise<SubscriberEntity[]> {
     return this.subscriberRepo
       .createQueryBuilder("sub")
-      .where(":pattern = ANY(sub.patterns) AND sub.active = true", { pattern })
+      .where("sub.patterns @> ARRAY[:pattern]::text[] AND sub.active = true", { pattern })
       .getMany();
   }
 
@@ -212,20 +212,29 @@ export class EventsService {
 
     const [data, total] = await qb.getManyAndCount();
 
-    const dataWithDeliveries = await Promise.all(
-      data.map(async (e) => {
-        const deliveries = await this.deliveryRepo.find({
-          where: { eventId: e.id },
-        });
-        return {
-          ...e,
-          deliveries: deliveries.map((d) => ({
-            subscriberId: d.subscriberId,
-            status: d.status,
-          })),
-        };
-      }),
-    );
+    const eventIds = data.map((e) => e.id);
+    const allDeliveries = eventIds.length > 0
+      ? await this.deliveryRepo
+          .createQueryBuilder("d")
+          .select(["d.id", "d.eventId", "d.subscriberId", "d.status"])
+          .where("d.eventId IN (:...ids)", { ids: eventIds })
+          .getMany()
+      : [];
+
+    const deliveriesByEvent = new Map<number, typeof allDeliveries>();
+    for (const d of allDeliveries) {
+      const list = deliveriesByEvent.get(d.eventId);
+      if (list) list.push(d);
+      else deliveriesByEvent.set(d.eventId, [d]);
+    }
+
+    const dataWithDeliveries = data.map((e) => ({
+      ...e,
+      deliveries: (deliveriesByEvent.get(e.id) ?? []).map((d) => ({
+        subscriberId: d.subscriberId,
+        status: d.status,
+      })),
+    }));
 
     return { total, page, limit, data: dataWithDeliveries };
   }

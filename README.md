@@ -877,15 +877,16 @@ uses HTTP webhooks. For high-volume subscribers, you can:
 
 ## Throughput Tuning
 
-Default config yields ~5 events/sec (`BATCH_SIZE=10`, `WORKER_INTERVAL_MS=2000`).
-The bottleneck is the polling interval, not HTTP latency.
+Default config yields ~500 events/sec (`BATCH_SIZE=50`, `WORKER_INTERVAL_MS=500`).
+Parallel fan-out, GIN-indexed subscriber lookups, and per-cycle subscriber caching
+keep the bottleneck on subscriber response time, not event-server processing.
 
 | Target | Config | Notes |
 |--------|--------|-------|
-| 50 ev/s | `BATCH_SIZE=50`, `WORKER_INTERVAL_MS=1000` | Single instance |
-| 200 ev/s | `BATCH_SIZE=200`, `WORKER_INTERVAL_MS=500`, `DB_POOL_MAX=30` | Single instance |
-| 500+ ev/s | Above + 3-5 worker replicas | `SKIP LOCKED` ensures no duplicate processing |
-| 1000+ ev/s | Switch to `KafkaEventClient` | `IEventClient` interface is transport-agnostic |
+| 500 ev/s | Defaults (no tuning needed) | Single instance |
+| 2,000 ev/s | `BATCH_SIZE=200`, `WORKER_INTERVAL_MS=200`, `DB_POOL_MAX=80` | Single instance |
+| 5,000+ ev/s | Above + 3-5 worker replicas | `SKIP LOCKED` ensures no duplicate processing |
+| 10,000+ ev/s | Above + 10 replicas | Or switch to `IEventClient` with Redis Streams |
 
 ### Horizontal scaling
 
