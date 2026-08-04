@@ -859,6 +859,22 @@ delivery table. Replace event-server with:
 **Broker replacement does NOT affect domain services.** They already expose webhook
 endpoints — only the event-server changes.
 
+### How to replace the transport
+
+The toolkit's `IEventClient` is a single-method interface. Domain services call
+`eventClient.publish(pattern, payload)` — they don't know or care how the event reaches
+the broker. See the [Event Publishing section](../api-server-toolkit/README.md#event-publishing)
+in the toolkit README for a complete Redis Streams example.
+
+**Publisher side** (domain service → broker): implement `IEventClient` with your broker
+of choice (~20 lines). Override in `AppModule`.
+
+**Delivery side** (broker → subscriber): this is where event-server's `DeliveryService`
+uses HTTP webhooks. For high-volume subscribers, you can:
+1. Keep HTTP webhooks (sufficient for most cases)
+2. Add a message queue consumer alongside the HTTP delivery
+3. Replace event-server entirely with a managed broker (loses retry, circuit breaker, audit trail)
+
 ## Throughput Tuning
 
 Default config yields ~5 events/sec (`BATCH_SIZE=10`, `WORKER_INTERVAL_MS=2000`).
