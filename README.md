@@ -1,7 +1,7 @@
 # Event Server — Central Event Broker
 
 [![Tests](https://github.com/fwmakc/event-server/actions/workflows/test.yml/badge.svg)](https://github.com/fwmakc/event-server/actions/workflows/test.yml)
-[![Version](https://img.shields.io/badge/version-v0.5.0-blue)](https://github.com/fwmakc/event-server/releases)
+[![Version](https://img.shields.io/badge/version-v0.5.1-blue)](https://github.com/fwmakc/event-server/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fwmakc/event-server/blob/main/LICENSE)
 
 > Reference implementation: event bus pattern — pluggable transport (HTTP now, Kafka/Redis ready), typed contracts, circuit breaker.
