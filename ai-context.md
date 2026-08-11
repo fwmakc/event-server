@@ -1,7 +1,7 @@
 # AI Context — event-server
 
 > Auto-generated. Run `npm run ai-context` to regenerate.
-> Generated: 2026-08-01T21:10:11.506Z
+> Generated: 2026-08-11T20:05:20.187Z
 
 ---
 
@@ -23,12 +23,6 @@ Base path: `/contracts`
 | `GET` | `/events` |
 | `GET` | `/events/:id` |
 
-### HealthController
-
-| Method | Path |
-|--------|------|
-| `GET` | `/health` |
-
 ### SubscribersController
 
 | Method | Path |
@@ -47,7 +41,6 @@ Base path: `/contracts`
 - `deliver(event: EventEntity,
     subscriber: SubscriberEntity,
     delivery: DeliveryEntity,): Promise<DeliveryResult>`
-- `min(event.timeout * 1000, this.defaultTimeout): this.defaultTimeout`
 - `handleFailure(delivery: DeliveryEntity,
     event: EventEntity,
     subscriber: SubscriberEntity,
@@ -62,6 +55,7 @@ Base path: `/contracts`
 - `processSync(event: EventEntity): Promise<PublishResult>`
 - `findMatchingSubscribers(pattern: string): Promise<SubscriberEntity[]>`
 - `findOne(id: number): Promise<EventEntity | null>`
+- `getMany(): []`
 - `getMany(): []`
 
 ### SubscribersService
