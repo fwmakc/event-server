@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-09-28
+### Changed
+- Node.js runtime bumped 22 → 24 LTS: Docker images `node:24-alpine`, CI `node-version: 24`.
+- Toolkit pinned to `api-server-toolkit#v0.18.0` (adds `ApiKeyGuard` / `@ApiKey()`; no behavior change for existing routes).
+
 ## [0.5.0] - 2026-08-03
 
 Version reset to pre-release. The event server is functional (33 tests, HTTP webhook bus, circuit breaker, subscriber management) but the overall stack is not yet production-hardened. Pinned to `api-server-toolkit#v0.9.0`.
