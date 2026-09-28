@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Create test database
@@ -43,3 +43,24 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: event-server
+
+      # Dockerfile copies the toolkit from a sibling directory
+      - uses: actions/checkout@v4
+        with:
+          repository: fwmakc/api-server-toolkit
+          ref: v0.17.0
+          path: api-server-toolkit
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: event-server/Dockerfile
+          push: false
