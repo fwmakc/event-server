@@ -3,7 +3,8 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY event-server/package*.json ./
-RUN npm install --legacy-peer-deps --ignore-scripts
+RUN npm install --legacy-peer-deps --ignore-scripts \
+  --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000
 
 COPY api-server-toolkit/dist ./node_modules/api-server-toolkit/dist
 COPY api-server-toolkit/src ./node_modules/api-server-toolkit/src
