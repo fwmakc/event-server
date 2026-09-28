@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-09-28
 
+- Access logging added (`Morgan.setup`); JSON logs + request id via toolkit v0.20.0 (`LOG_FORMAT=json`, compose sets it in production).
+
 ### Added
 - `POST /events/:id/replay` — requeue every failed delivery of an event; `POST /deliveries/:id/replay` — requeue one terminal delivery (400 on pending/processing). Events are reopened as `processing` and re-resolved by the worker.
 - Circuit breaker now publishes a `subscriber.deactivated` event through the bus (payload: subscriberId, service, url, failures, deactivatedAt; high priority, TTL 30d) and logs at `error` level — subscribe to the pattern to alert an operator (e.g. email via message-server).
