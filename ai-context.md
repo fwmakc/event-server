@@ -1,7 +1,7 @@
 # AI Context — event-server
 
 > Auto-generated. Run `npm run ai-context` to regenerate.
-> Generated: 2026-08-12T00:13:24.149Z
+> Generated: 2026-09-28T16:46:30.237Z
 
 ---
 
@@ -21,6 +21,8 @@ Base path: `/contracts`
 |--------|------|
 | `POST` | `/events` |
 | `GET` | `/events` |
+| `POST` | `/events/:id/replay` |
+| `POST` | `/deliveries/:id/replay` |
 | `GET` | `/events/:id` |
 
 ### SubscribersController
@@ -48,11 +50,14 @@ Base path: `/contracts`
     body: string,
     durationMs: number,): Promise<void>`
 - `checkCircuitBreaker(subscriber: SubscriberEntity): Promise<void>`
+- `publishDeactivationAlert(subscriber: SubscriberEntity, failures: number): Promise<void>`
 
 ### EventsService
 
 - `publish(dto: PublishEventDto): Promise<PublishResult>`
 - `processSync(event: EventEntity): Promise<PublishResult>`
+- `replayEvent(eventId: number): Promise<`
+- `replayDelivery(id: number): Promise<DeliveryEntity>`
 - `findMatchingSubscribers(pattern: string): Promise<SubscriberEntity[]>`
 - `findOne(id: number): Promise<EventEntity | null>`
 - `getMany(): []`
@@ -91,6 +96,16 @@ Base path: `/contracts`
 | `email` | `string` | no |
 | `subject` | `string` | no |
 | `resetUrl` | `string` | no |
+
+### SubscriberDeactivatedDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `subscriberId` | `number` | no |
+| `service` | `string` | no |
+| `url` | `string` | no |
+| `failures` | `number` | no |
+| `deactivatedAt` | `string` | no |
 
 ### UserConfirmedDto
 

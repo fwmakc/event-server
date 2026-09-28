@@ -23,6 +23,8 @@ export class DeliveryService {
     private readonly config: ConfigService,
     @InjectRepository(DeliveryEntity)
     private readonly deliveryRepo: Repository<DeliveryEntity>,
+    @InjectRepository(EventEntity)
+    private readonly eventRepo: Repository<EventEntity>,
     @InjectRepository(SubscriberEntity)
     private readonly subscriberRepo: Repository<SubscriberEntity>,
   ) {
@@ -207,10 +209,49 @@ export class DeliveryService {
 
     if (newStreak >= this.circuitBreakerThreshold) {
       await this.subscriberRepo.update(subscriber.id, { active: false, failureStreak: 0 });
-      this.logger.warn(
-        `Circuit breaker: deactivated subscriber ${subscriber.service} (id=${subscriber.id}) ` +
+      this.logger.error(
+        `ALERT: circuit breaker deactivated subscriber ${subscriber.service} (id=${subscriber.id}) ` +
         `after ${newStreak} consecutive permanent failures`,
       );
+      await this.publishDeactivationAlert(subscriber, newStreak);
+    }
+  }
+
+  /**
+   * Fan a subscriber.deactivated event through the bus itself: any service
+   * subscribed to the pattern (e.g. message-server emailing an operator)
+   * learns about the deactivation. Must never break delivery handling.
+   */
+  private async publishDeactivationAlert(subscriber: SubscriberEntity, failures: number): Promise<void> {
+    try {
+      const now = new Date();
+      const event = this.eventRepo.create({
+        pattern: "subscriber.deactivated",
+        payload: {
+          subscriberId: subscriber.id,
+          service: subscriber.service,
+          url: subscriber.url,
+          failures,
+          deactivatedAt: now.toISOString(),
+        },
+        source: "event-server",
+        broadcast: true,
+        awaitResponse: false,
+        timeout: 30,
+        maxAttempts: 5,
+        retryDelay: 5,
+        log: true,
+        ttl: 30,
+        priority: "high",
+        delay: 0,
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        deliverAfter: null,
+      });
+      const saved = await this.eventRepo.save(event);
+      this.logger.log(`Deactivation alert published: event ${saved.id} (pattern subscriber.deactivated)`);
+    } catch (err) {
+      this.logger.error(`Failed to publish subscriber.deactivated alert: ${err.message}`);
     }
   }
 }

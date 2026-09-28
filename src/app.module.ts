@@ -7,6 +7,7 @@ import { EventsModule } from "@src/events/events.module";
 import { SubscribersModule } from "@src/subscribers/subscribers.module";
 import { DeliveryModule } from "@src/delivery/delivery.module";
 import { HealthModule } from "api-server-toolkit/health";
+import { MetricsModule } from "api-server-toolkit/metrics";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { HealthModule } from "api-server-toolkit/health";
     EventsModule,
     SubscribersModule,
     HealthModule.forRoot("event-server"),
+    MetricsModule.forRoot({ service: "event-server" }),
   ],
   providers: [
     { provide: APP_FILTER, useClass: SentryGlobalFilter },

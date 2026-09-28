@@ -57,6 +57,7 @@ Event-server owns all event contracts as typed DTOs, exported via the npm subpat
 | `password.reset` | `PasswordResetDto` | username, email, subject, resetUrl |
 | `user.deactivated` | `UserDeactivatedDto` | userId, username, email |
 | `user.deleted` | `UserDeletedDto` | userId, username, email |
+| `subscriber.deactivated` | `SubscriberDeactivatedDto` | subscriberId, service, url, failures, deactivatedAt |
 | *(webhook envelope)* | `WebhookEnvelopeDto` | eventId, pattern, payload, source, timestamp, attempt |
 
 ### Importing contracts
@@ -327,6 +328,39 @@ HTTP 200
   "message": "No subscribers for pattern 'user.registered'"
 }
 ```
+
+### POST /events/:id/replay — Replay failed deliveries
+
+Requeues every **failed** delivery of an event (attempts reset to 0, status back to
+`pending`); the worker redelivers on its next cycle. The event itself is reopened
+as `processing` and re-resolves once the replayed deliveries settle.
+
+```json
+// Response
+HTTP 200
+{ "eventId": 42, "replayed": 1 }
+```
+
+### POST /deliveries/:id/replay — Replay a single delivery
+
+Requeues one terminal (`failed` or `delivered`) delivery. Returns 400 if the
+delivery is still `pending`/`processing` (the worker owns it — nothing to replay).
+
+```json
+// Response
+HTTP 200
+{
+  "id": 7,
+  "eventId": 42,
+  "subscriberId": 1,
+  "status": "pending",
+  "attempts": 0,
+  "maxAttempts": 5
+}
+```
+
+> **Operator loop:** `GET /events?status=failed` → inspect `GET /events/:id` →
+> fix the subscriber → `POST /events/:id/replay`.
 
 ### GET /events — List events
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -143,6 +143,73 @@ export class EventsService {
       status: eventStatus,
       deliveries: results,
     };
+  }
+
+  /**
+   * Requeue every failed delivery of an event. Returns how many were requeued.
+   */
+  async replayEvent(eventId: number): Promise<{ eventId: number; replayed: number }> {
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event) {
+      throw new NotFoundException(`Event ${eventId} not found`);
+    }
+
+    const result = await this.deliveryRepo
+      .createQueryBuilder()
+      .update()
+      .set({
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: null,
+        responseCode: null,
+        responseBody: null,
+      })
+      .where("eventId = :id AND status = :status", { id: eventId, status: "failed" })
+      .execute();
+
+    const replayed = result.affected ?? 0;
+    if (replayed > 0) {
+      await this.eventRepo.update(eventId, { status: "processing" });
+      this.logger.log(`Event ${eventId} replay: ${replayed} failed delivery(ies) requeued`);
+    }
+
+    return { eventId, replayed };
+  }
+
+  /**
+   * Requeue a single terminal (failed/delivered) delivery.
+   */
+  async replayDelivery(id: number): Promise<DeliveryEntity> {
+    const delivery = await this.deliveryRepo.findOne({ where: { id } });
+    if (!delivery) {
+      throw new NotFoundException(`Delivery ${id} not found`);
+    }
+    if (delivery.status === "pending" || delivery.status === "processing") {
+      throw new BadRequestException(
+        `Delivery ${id} is ${delivery.status} — nothing to replay`,
+      );
+    }
+
+    await this.deliveryRepo.update(id, {
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: null,
+      responseCode: null,
+      responseBody: null,
+    });
+    // Re-open a terminal event so resolveEvents() re-evaluates it
+    // once the replayed delivery settles.
+    await this.eventRepo
+      .createQueryBuilder()
+      .update()
+      .set({ status: "processing" })
+      .where("id = :id AND status IN ('failed', 'delivered')", { id: delivery.eventId })
+      .execute();
+
+    this.logger.log(
+      `Delivery ${id} replay requested (event ${delivery.eventId}, subscriber ${delivery.subscriberId})`,
+    );
+    return (await this.deliveryRepo.findOne({ where: { id } }))!;
   }
 
   async findMatchingSubscribers(pattern: string): Promise<SubscriberEntity[]> {

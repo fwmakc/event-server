@@ -47,6 +47,24 @@ export class EventsController {
     });
   }
 
+  @Post("events/:id/replay")
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async replayEvent(@Param("id") id: string) {
+    return this.eventsService.replayEvent(Number(id));
+  }
+
+  @Post("deliveries/:id/replay")
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async replayDelivery(@Param("id") id: string) {
+    const delivery = await this.eventsService.replayDelivery(Number(id));
+    if (!delivery) {
+      throw new NotFoundException(`Delivery ${id} not found`);
+    }
+    return delivery;
+  }
+
   @Get("events/:id")
   @UseGuards(InternalAuthGuard)
   async findOne(@Param("id") id: string) {

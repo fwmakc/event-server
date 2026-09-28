@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-28
+
+### Added
+- `POST /events/:id/replay` — requeue every failed delivery of an event; `POST /deliveries/:id/replay` — requeue one terminal delivery (400 on pending/processing). Events are reopened as `processing` and re-resolved by the worker.
+- Circuit breaker now publishes a `subscriber.deactivated` event through the bus (payload: subscriberId, service, url, failures, deactivatedAt; high priority, TTL 30d) and logs at `error` level — subscribe to the pattern to alert an operator (e.g. email via message-server).
+- Contract `SubscriberDeactivatedDto` registered in `EventContracts` and the `GET /contracts/catalog`.
+- Prometheus `/metrics` endpoint via toolkit `MetricsModule` v0.19.0 (`http_requests_total`, `http_request_duration_seconds`, Node.js defaults; internal networks only).
+- 8 tests: replay endpoints (requeue, 404/400 paths, worker redelivery) + circuit-breaker deactivation alert.
+
 ## [0.5.2] - 2026-09-28
 ### Changed
 - Node.js runtime bumped 22 → 24 LTS: Docker images `node:24-alpine`, CI `node-version: 24`.
