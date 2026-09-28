@@ -58,6 +58,15 @@ jobs:
           ref: v0.18.0
           path: api-server-toolkit
 
+      # dist/ is gitignored in the toolkit — build it for the Docker COPY
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build toolkit
+        run: cd api-server-toolkit && npm install --legacy-peer-deps --ignore-scripts && npx tsc
+
       - name: Build Docker image (no push)
         uses: docker/build-push-action@v6
         with:
