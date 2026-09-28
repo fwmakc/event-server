@@ -89,7 +89,7 @@ jobs:
           echo "Applied migrations: $COUNT"
           [ "$COUNT" -gt 0 ]
 
-  docker-build::
+  docker-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
