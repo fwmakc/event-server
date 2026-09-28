@@ -228,7 +228,7 @@ export class DeliveryService {
       const event = this.eventRepo.create({
         pattern: "subscriber.deactivated",
         payload: {
-          subscriberId: subscriber.id,
+          subscriberId: Number(subscriber.id),
           service: subscriber.service,
           url: subscriber.url,
           failures,
