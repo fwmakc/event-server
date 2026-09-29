@@ -94,6 +94,7 @@ jobs:
       # have to agree — otherwise a fresh deployment gets the wrong schema.
       - name: Check entities have no drift against migrations
         env:
+          DB_TYPE: postgres
           DB_HOST: localhost
           DB_PORT: 5432
           DB_NAME: migration_check
