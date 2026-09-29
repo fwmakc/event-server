@@ -645,7 +645,6 @@ DB_PORT=5432
 DB_NAME=event_server
 DB_USER=root
 DB_PASSWORD=1234
-DB_SYNCHRONIZE=false                # set true for dev schema sync
 DB_POOL_MAX=50                      # connection pool size
 
 # Security
@@ -672,6 +671,8 @@ SWAGGER_VERSION=1.0
 ---
 
 ## Database schema
+
+The schema is owned exclusively by TypeORM migrations (`src/typeorm/migrations`) — `synchronize` is not used. The app applies pending migrations on every boot, so the first boot on an empty database initializes it. Commands: `npm run migration:auto` (generate from entity changes), `migration:run`, `migration:revert`. CI proves the chain builds the schema from scratch and checks entity drift.
 
 ### events
 
@@ -863,7 +864,6 @@ event-server:
     - DB_NAME=event_server
     - DB_USER=root
     - DB_PASSWORD=1234
-    - DB_SYNCHRONIZE=${DB_SYNCHRONIZE:-false}
     - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme}
     - WORKER_INTERVAL_MS=500
     - WORKER_MAX_INTERVAL_MS=2000

@@ -18,14 +18,15 @@ import { EventEntity, SubscriberEntity, DeliveryEntity } from "./entities";
         password: config.get<string>("DB_PASSWORD"),
         database: config.get<string>("DB_NAME", "event_server"),
         entities: [EventEntity, SubscriberEntity, DeliveryEntity],
-        synchronize: config.get<string>("DB_SYNCHRONIZE", "false") === "true",
+        // Schema is owned by migrations only (src/typeorm/migrations) — pending
+        // migrations are applied on every boot; never enable synchronize.
+        migrationsRun: true,
         logging: config.get<string>("DB_LOG", "false") === "true",
         extra: {
           max: Number(config.get<string>("DB_POOL_MAX", "50")),
         },
         migrations: [join(__dirname, "../typeorm/migrations/*{.ts,.js}")],
         migrationsTableName: "migrations_typeorm",
-        migrationsRun: config.get<string>("DB_MIGRATIONS_RUN", "false") === "true",
       }),
     }),
     TypeOrmModule.forFeature([EventEntity, SubscriberEntity, DeliveryEntity]),

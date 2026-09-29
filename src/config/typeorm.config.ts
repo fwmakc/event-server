@@ -17,14 +17,9 @@ const config = {
   migrationsTableName: "migrations_typeorm",
 } as DataSourceOptions;
 
+// No module-level initialize(): the TypeORM CLI loads and initializes the
+// data-source itself, and a second initialize() here races with it, making
+// migration commands flaky. The app connects via its own DatabaseModule.
 const AppDataSource = new DataSource(config);
-
-AppDataSource.initialize()
-  .then(() => {
-    console.log("Data Source has been initialized!");
-  })
-  .catch((e) => {
-    console.error("Error during Data Source initialization", e);
-  });
 
 export default AppDataSource;

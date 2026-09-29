@@ -9,6 +9,11 @@ import {
 
 @Entity("subscribers")
 @Index("idx_subscribers_active", ["active"])
+// GIN index on the patterns array — created by the AddSubscriberGinIndex
+// migration; TypeORM cannot express GIN via decorators, and this version's
+// IndexOptions type predates the `synchronize` flag (runtime honors it), so
+// cast. Keeps the index out of schema diffing.
+@Index("idx_subscribers_patterns", ["patterns"], { synchronize: false } as any)
 export class SubscriberEntity {
   @PrimaryGeneratedColumn()
   id: number;

@@ -74,7 +74,7 @@ jobs:
         run: npm ci
 
       # Proves the migration chain builds the schema from scratch —
-      # the same thing DB_MIGRATIONS_RUN=true does on deploy.
+      # the same thing the service does on every boot (migrationsRun is hardcoded).
       - name: Run migrations on a clean database
         env:
           DB_HOST: localhost
@@ -88,6 +88,23 @@ jobs:
           COUNT=$(PGPASSWORD=1234 psql -h localhost -U root -d migration_check -t -A -c "SELECT count(*) FROM migrations_typeorm;")
           echo "Applied migrations: $COUNT"
           [ "$COUNT" -gt 0 ]
+
+      # Entities must not drift from the migration chain: generate must find
+      # zero diff. The app auto-migrates on boot, so entities and migrations
+      # have to agree — otherwise a fresh deployment gets the wrong schema.
+      - name: Check entities have no drift against migrations
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: migration_check
+          DB_USER: root
+          DB_PASSWORD: "1234"
+        run: |
+          RESULT=$(npm run typeorm migration:generate -- -d ./src/config/typeorm.config.ts ./drift-probe 2>&1) || true
+          rm -f *-drift-probe.ts 2>/dev/null; rm -rf drift-probe
+          echo "$RESULT" | tail -3
+          echo "$RESULT" | grep -q "No changes in database schema were found" \
+            || { echo "::error::Entities drifted from migrations — run npm run migration:auto and commit the generated migration"; exit 1; }
 
   docker-build:
     runs-on: ubuntu-latest
