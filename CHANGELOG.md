@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-09-29
 ### Changed
 - Toolkit pinned to v0.20.2 (bootstrap binds 0.0.0.0 by default).
 
-## [0.7.1] - 2026-09-29
-0.7.0] - 2026-09-29
+## [0.7.0] - 2026-09-29
+] - 2026-09-29
 ### Fixed
 - The GIN index on subscribers.patterns is now declared in the entity (synchronize: false) so entities have no drift against the migration chain.
 - src/config/typeorm.config.ts no longer self-initializes the DataSource on import — it raced with the CLI initialization and made migration commands flaky.
