@@ -100,7 +100,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: fwmakc/api-server-toolkit
-          ref: v0.20.0
+          ref: v0.20.1
           path: api-server-toolkit
 
       # dist/ is gitignored in the toolkit — build it for the Docker COPY
