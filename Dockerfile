@@ -27,6 +27,6 @@ ENV ROOT_PATH=.
 USER node
 EXPOSE 3005
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=15s \
-  CMD wget -qO- http://localhost:3005/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3005/health || exit 1
 
 CMD ["node", "-r", "tsconfig-paths/register", "dist/main"]
