@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-09-30
+### Changed
+- Toolkit pinned `#v0.22.0` (self-pentest wave 4): Access-бины fail-closed (rule.filter компилируется, scope-all — явный bind), delete-гварды покрывают tenant-бинды, scoped `movePosition`, search не расширяет загрузку связей, `getClientIp()`/`TRUST_PROXY`.
+
 ## [0.8.1] - 2026-09-30
 ### Changed
 - Pin: toolkit `#v0.21.1` (AuditModule DI fix; event-server itself owns the audit store, so no behavioral change here).
