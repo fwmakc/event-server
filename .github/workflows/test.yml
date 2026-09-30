@@ -114,11 +114,17 @@ jobs:
         with:
           path: event-server
 
+      # Resolve the toolkit ref from the service's package.json pin so a
+      # toolkit release never requires editing this workflow.
+      - name: Resolve sibling pins from package.json
+        run: |
+          echo "TOOLKIT_REF=$(node -p "require('./event-server/package.json').dependencies['api-server-toolkit'].split('#')[1]")" >> $GITHUB_ENV
+
       # Dockerfile copies the toolkit from a sibling directory
       - uses: actions/checkout@v4
         with:
           repository: fwmakc/api-server-toolkit
-          ref: v0.20.1
+          ref: ${{ env.TOOLKIT_REF }}
           path: api-server-toolkit
 
       # dist/ is gitignored in the toolkit — build it for the Docker COPY
