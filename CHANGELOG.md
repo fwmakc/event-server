@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-09-30
+### Changed (dependency)
+- `api-server-toolkit` v0.23.0: boot migrations now run through
+  `runMigrationsUnderLock()` (pg advisory xact lock) in `dataSourceFactory` —
+  simultaneously booting replicas serialize instead of racing `InitialSchema`
+  on a cold database (TypeORM 0.3.x has no built-in migration locking).
+### Fixed
+- **Every `audit.event` publish 500'd**: `AuditEventEntity` was never
+  registered in the DataSource (`entities: [...]` listed only the bus
+  entities; `forFeature` alone does not add metadata), so the audit store
+  threw `EntityMetadataNotFoundError` on every append — the whole audit
+  chain was silently dead in deployed stacks. Registered in both `forRoot`
+  and `forFeature`.
+
 ## [0.8.2] - 2026-09-30
 ### Changed
 - Toolkit pinned `#v0.22.0` (self-pentest wave 4): Access-бины fail-closed (rule.filter компилируется, scope-all — явный bind), delete-гварды покрывают tenant-бинды, scoped `movePosition`, search не расширяет загрузку связей, `getClientIp()`/`TRUST_PROXY`.
