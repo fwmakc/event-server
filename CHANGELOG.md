@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-09-30
+### Changed
+- Pin: toolkit `#v0.21.1` (AuditModule DI fix; event-server itself owns the audit store, so no behavioral change here).
+
 ## [0.8.0] - 2026-09-30
 ### Added
 - **Audit log store** — event-server becomes the owner of the security audit trail. New contract `audit.event` (`AuditEventDto`: action, outcome, accountId/username, tenant, ip, user-agent, requestId, target, details) registered in `EventContracts`; `EventsService.publish` routes payloads with this pattern into the append-only `audit_events` table instead of the webhook bus. Storage is tamper-evident via a SHA-256 hash chain (`hash = sha256(prevHash|ts|fields)`, canonical JSON with sorted keys), writes are serialized with a `pg_advisory_xact_lock` so concurrent appends can't fork the chain.
