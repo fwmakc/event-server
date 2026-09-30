@@ -3,9 +3,20 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY event-server/package*.json ./
-RUN npm install --legacy-peer-deps --ignore-scripts \
+# Install against a local stub instead of the git-pinned toolkit: npm
+# "prepares" git deps by installing their whole devDependency tree from
+# the registry just to run `prepare` — slow and network-flaky — and reifies
+# stale git entries from the lockfile even after package.json changed.
+# Both files are rewritten here; the real toolkit is copied into
+# node_modules right after the install.
+RUN mkdir -p toolkit-stub \
+    && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.dependencies['api-server-toolkit']='file:./toolkit-stub';fs.writeFileSync('package.json',JSON.stringify(p,null,2));const l=JSON.parse(fs.readFileSync('package-lock.json','utf8'));delete l.packages['node_modules/api-server-toolkit'];if(l.dependencies){delete l.dependencies['api-server-toolkit'];}fs.writeFileSync('package-lock.json',JSON.stringify(l,null,2))" \
+    && echo '{"name":"api-server-toolkit","version":"0.0.0-stub","dependencies":{"@supercharge/request-ip":"*","prom-client":"*"}}' > toolkit-stub/package.json
+RUN --mount=type=cache,target=/root/.npm npm install --legacy-peer-deps --ignore-scripts --install-links \
   --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000
 
+COPY api-server-toolkit/package.json ./node_modules/api-server-toolkit/package.json
+RUN rm -rf node_modules/api-server-toolkit
 COPY api-server-toolkit/dist ./node_modules/api-server-toolkit/dist
 COPY api-server-toolkit/src ./node_modules/api-server-toolkit/src
 
