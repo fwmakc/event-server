@@ -15,8 +15,8 @@ RUN mkdir -p toolkit-stub \
 RUN --mount=type=cache,target=/root/.npm npm install --legacy-peer-deps --ignore-scripts --install-links \
   --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=600000
 
-COPY api-server-toolkit/package.json ./node_modules/api-server-toolkit/package.json
 RUN rm -rf node_modules/api-server-toolkit
+COPY api-server-toolkit/package.json ./node_modules/api-server-toolkit/package.json
 COPY api-server-toolkit/dist ./node_modules/api-server-toolkit/dist
 COPY api-server-toolkit/src ./node_modules/api-server-toolkit/src
 
