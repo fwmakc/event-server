@@ -6,6 +6,7 @@ export { UserDeletedDto } from "./dto/user-deleted.dto";
 export { UserTwoFactorCodeDto } from "./dto/user-two-factor-code.dto";
 export { WebhookEnvelopeDto } from "./dto/webhook-envelope.dto";
 export { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
+export { AuditEventDto } from "./dto/audit-event.dto";
 
 import { UserRegisteredDto } from "./dto/user-registered.dto";
 import { UserConfirmedDto } from "./dto/user-confirmed.dto";
@@ -14,6 +15,7 @@ import { UserDeactivatedDto } from "./dto/user-deactivated.dto";
 import { UserDeletedDto } from "./dto/user-deleted.dto";
 import { UserTwoFactorCodeDto } from "./dto/user-two-factor-code.dto";
 import { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
+import { AuditEventDto } from "./dto/audit-event.dto";
 
 export const EventContracts = {
   "user.registered": UserRegisteredDto,
@@ -23,6 +25,7 @@ export const EventContracts = {
   "user.deleted": UserDeletedDto,
   "user.two_factor_code": UserTwoFactorCodeDto,
   "subscriber.deactivated": SubscriberDeactivatedDto,
+  "audit.event": AuditEventDto,
 } as const;
 
 export type EventPattern = keyof typeof EventContracts;

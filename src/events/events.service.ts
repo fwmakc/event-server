@@ -7,7 +7,8 @@ import { plainToInstance } from "class-transformer";
 import { EventEntity, SubscriberEntity, DeliveryEntity, DeliveryStatus } from "@src/database/entities";
 import { PublishEventDto } from "./dto/publish-event.dto";
 import { DeliveryService } from "@src/delivery/delivery.service";
-import { EventContracts } from "@src/contracts";
+import { EventContracts, AuditEventDto } from "@src/contracts";
+import { AUDIT_EVENT_PATTERN, AuditStoreService } from "@src/audit/audit-store.service";
 
 export interface PublishResult {
   eventId: number;
@@ -37,6 +38,7 @@ export class EventsService {
     @InjectRepository(DeliveryEntity)
     private readonly deliveryRepo: Repository<DeliveryEntity>,
     private readonly deliveryService: DeliveryService,
+    private readonly auditStore: AuditStoreService,
   ) {
     this.strictMode = config.get<string>("EVENT_STRICT_MODE", "false") === "true";
   }
@@ -54,6 +56,14 @@ export class EventsService {
       }
     } else if (this.strictMode) {
       throw new BadRequestException(`Unknown event pattern: "${dto.pattern}"`);
+    }
+
+    // Audit records go to the append-only store before the event row: if the
+    // store write fails the whole publish fails, so a client retry cannot
+    // silently drop a security record.
+    if (dto.pattern === AUDIT_EVENT_PATTERN) {
+      const entry = plainToInstance(AuditEventDto, dto.payload);
+      await this.auditStore.append(entry);
     }
 
     const now = new Date();

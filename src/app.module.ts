@@ -6,6 +6,7 @@ import { DatabaseModule } from "@src/database/database.module";
 import { EventsModule } from "@src/events/events.module";
 import { SubscribersModule } from "@src/subscribers/subscribers.module";
 import { DeliveryModule } from "@src/delivery/delivery.module";
+import { AuditModule } from "@src/audit/audit.module";
 import { HealthModule } from "api-server-toolkit/health";
 import { MetricsModule } from "api-server-toolkit/metrics";
 
@@ -17,6 +18,7 @@ import { MetricsModule } from "api-server-toolkit/metrics";
     DeliveryModule,
     EventsModule,
     SubscribersModule,
+    AuditModule,
     HealthModule.forRoot("event-server"),
     MetricsModule.forRoot({ service: "event-server" }),
   ],

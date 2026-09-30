@@ -6,6 +6,7 @@ export { UserDeletedDto } from "./dto/user-deleted.dto";
 export { UserTwoFactorCodeDto } from "./dto/user-two-factor-code.dto";
 export { WebhookEnvelopeDto } from "./dto/webhook-envelope.dto";
 export { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
+export { AuditEventDto } from "./dto/audit-event.dto";
 import { UserRegisteredDto } from "./dto/user-registered.dto";
 import { UserConfirmedDto } from "./dto/user-confirmed.dto";
 import { PasswordResetDto } from "./dto/password-reset.dto";
@@ -13,6 +14,7 @@ import { UserDeactivatedDto } from "./dto/user-deactivated.dto";
 import { UserDeletedDto } from "./dto/user-deleted.dto";
 import { UserTwoFactorCodeDto } from "./dto/user-two-factor-code.dto";
 import { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
+import { AuditEventDto } from "./dto/audit-event.dto";
 export declare const EventContracts: {
     readonly "user.registered": typeof UserRegisteredDto;
     readonly "user.confirmed": typeof UserConfirmedDto;
@@ -21,5 +23,6 @@ export declare const EventContracts: {
     readonly "user.deleted": typeof UserDeletedDto;
     readonly "user.two_factor_code": typeof UserTwoFactorCodeDto;
     readonly "subscriber.deactivated": typeof SubscriberDeactivatedDto;
+    readonly "audit.event": typeof AuditEventDto;
 };
 export type EventPattern = keyof typeof EventContracts;
