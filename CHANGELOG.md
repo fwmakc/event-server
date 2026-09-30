@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-09-30
+### Added
+- Swagger UI: `main.ts` now calls the toolkit `Swagger.setup(app)` like every other service — it was the only one without it, so its routes (`/events`, `/subscribers`, `/webhooks`) had no OpenAPI document. Activated by `SWAGGER_PREFIX` (verified in-network: `/swagger` 200, `/swagger-json` serves the spec).
+
 ## [0.7.2] - 2026-09-29
 ### Changed
 - Toolkit pinned to v0.20.3 (QueueWorker claim: Postgres forbids FOR UPDATE on the nullable side of an outer join — relations are now hydrated by a second lock-free query inside the claim transaction).

@@ -1,7 +1,15 @@
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { bootstrap } from "api-server-toolkit/bootstrap";
-import { Sentry, Helmet, Morgan, ValidationPipe, Log, Prefix } from "api-server-toolkit/bootstrap/setup";
+import {
+  Sentry,
+  Helmet,
+  Morgan,
+  ValidationPipe,
+  Log,
+  Prefix,
+  Swagger,
+} from "api-server-toolkit/bootstrap/setup";
 import { AppModule } from "@src/app.module";
 
 async function main() {
@@ -14,6 +22,7 @@ async function main() {
   Morgan.setup(app);
   ValidationPipe.setup(app);
   Prefix.setup(app);
+  Swagger.setup(app);
 
   app.set("json spaces", 2);
 
