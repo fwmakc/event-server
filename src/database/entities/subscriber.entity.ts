@@ -27,6 +27,12 @@ export class SubscriberEntity {
   @Column({ type: "text", array: true, default: [] })
   patterns: string[];
 
+  // Per-subscriber HMAC secret for delivery signatures. Nullable: legacy
+  // subscribers keep the shared-key transport until a secret is provisioned.
+  // Never returned by list/read endpoints — only at create/rotate.
+  @Column({ type: "varchar", nullable: true })
+  secret: string | null;
+
   @Column({ type: "boolean", default: true })
   active: boolean;
 

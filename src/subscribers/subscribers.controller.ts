@@ -34,6 +34,14 @@ export class SubscribersController {
     return this.service.remove(Number(id));
   }
 
+  // Generates a fresh per-subscriber secret; the response carries it exactly
+  // once — configure it on the subscriber (WEBHOOK_SECRET) and keep it there.
+  @Post("subscribe/:id/rotate")
+  @UseGuards(InternalAuthGuard)
+  async rotate(@Param("id") id: string) {
+    return this.service.rotateSecret(Number(id));
+  }
+
   @Get("subscribers")
   @UseGuards(InternalAuthGuard)
   async findAll() {

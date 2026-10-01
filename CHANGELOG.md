@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-10-01
+### Added
+- **Signed webhook delivery (HMAC-SHA256)**: subscribers can provision a
+  per-subscriber secret — pass `secret` (min 32 chars) at `POST /subscribe`
+  (both sides know it), or set `generateSecret: true` to have one generated
+  and returned exactly once in the create response; rotate via
+  `POST /subscribe/:id/rotate`. Deliveries to subscribers with a secret
+  carry `X-Event-Signature: sha256=<hmac>` + `X-Event-Timestamp` (signed
+  `<ts>.<rawBody>`, 300s replay window; verify with toolkit
+  `EventDeliveryGuard` + `WEBHOOK_SECRET`) instead of the shared internal
+  key. Subscribers without a secret keep the legacy internal-key transport
+  (no silent auto-generation — the registrant must know the secret).
+  Secrets are never returned by list/read — only `hasSecret: boolean`.
+- **Egress policy for subscriber URLs (anti-SSRF)**: `WEBHOOK_EGRESS_MODE`
+  = `internal` (default, any host — trusted docker network) | `public`
+  (private/loopback/link-local/metadata/CGNAT/TEST-NET/multicast blocked,
+  v4 + v6) | `allowlist` (+ `WEBHOOK_ALLOW_HOSTS`). Violations rejected
+  with 400 at create/update.
+- Migration `AddSubscriberSecret` (nullable `subscribers.secret` — legacy
+  subscribers keep the shared-key transport until a secret is provisioned).
+### Changed
+- Toolkit pinned `#v0.24.0`: `webhook-signature.helper` (sign/verify/egress)
+  + `EventDeliveryGuard`.
+
 ## [0.8.3] - 2026-09-30
 ### Changed (dependency)
 - `api-server-toolkit` v0.23.0: boot migrations now run through

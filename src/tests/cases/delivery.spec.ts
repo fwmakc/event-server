@@ -1,8 +1,13 @@
 import { INestApplication } from "@nestjs/common";
 import * as request from "supertest";
-import { Repository } from "typeorm";
+import { Repository, DataSource } from "typeorm";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { DeliveryEntity } from "@src/database/entities";
+import {
+  verifyEventDelivery,
+  WEBHOOK_SIGNATURE_HEADER,
+  WEBHOOK_TIMESTAMP_HEADER,
+} from "api-server-toolkit/helper";
 import { createTestApp } from "../app.testingModule";
 
 const mockFetch = jest.fn() as jest.Mock;
@@ -20,6 +25,8 @@ function mockResponse(status: number, data: unknown) {
 describe("Delivery — webhook delivery + retry", () => {
   let app: INestApplication;
   let deliveryRepo: Repository<DeliveryEntity>;
+  let dataSource: DataSource;
+  let subscriberSecret: string;
   const apiKey = "test-api-key";
   const headers = { "X-Internal-Api-Key": apiKey };
 
@@ -35,15 +42,20 @@ describe("Delivery — webhook delivery + retry", () => {
     const result = await createTestApp();
     app = result.app;
     deliveryRepo = result.moduleRef.get(getRepositoryToken(DeliveryEntity));
+    dataSource = result.moduleRef.get(DataSource);
 
-    await request(app.getHttpServer())
+    const created = await request(app.getHttpServer())
       .post("/subscribe")
       .set(headers)
       .send({
         service: "mock-service",
         url: "http://mock-service:9999/webhook",
         patterns: ["delivery.test"],
+        generateSecret: true,
       });
+    // Subscribers with a secret get HMAC-signed deliveries.
+    subscriberSecret = created.body.secret;
+    expect(subscriberSecret).toMatch(/^[0-9a-f]{64}$/);
   });
 
   afterAll(async () => {
@@ -70,12 +82,18 @@ describe("Delivery — webhook delivery + retry", () => {
     const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
     expect(lastCall[0]).toBe("http://mock-service:9999/webhook");
     expect(lastCall[1].method).toBe("POST");
-    expect(lastCall[1].headers).toEqual(
-      expect.objectContaining({
-        "X-Internal-Api-Key": "test-api-key",
-        "Content-Type": "application/json",
-      }),
-    );
+    // Signed delivery: HMAC headers instead of the shared internal key.
+    expect(lastCall[1].headers["X-Internal-Api-Key"]).toBeUndefined();
+    expect(lastCall[1].headers[WEBHOOK_SIGNATURE_HEADER]).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(lastCall[1].headers[WEBHOOK_TIMESTAMP_HEADER]).toBeDefined();
+    expect(
+      verifyEventDelivery(
+        subscriberSecret,
+        lastCall[1].body,
+        lastCall[1].headers[WEBHOOK_SIGNATURE_HEADER],
+        lastCall[1].headers[WEBHOOK_TIMESTAMP_HEADER],
+      ),
+    ).toBe(true);
     const webhookBody = JSON.parse(lastCall[1].body);
     expect(webhookBody).toEqual(
       expect.objectContaining({
@@ -124,6 +142,34 @@ describe("Delivery — webhook delivery + retry", () => {
     expect(res.body.status).toBe("failed");
     expect(res.body.deliveries[0].status).toBe("failed");
     expect(res.body.deliveries[0].responseBody).toContain("Connection refused");
+  });
+
+  it("legacy subscriber without secret still gets the shared internal key", async () => {
+    // Simulate a pre-migration row: secret provisioned never happened.
+    await dataSource.query(
+      `UPDATE subscribers SET secret = NULL WHERE service = 'mock-service'`,
+    );
+
+    await request(app.getHttpServer())
+      .post("/events")
+      .set(headers)
+      .send({
+        pattern: "delivery.test",
+        payload: { legacy: true },
+        source: "test",
+        awaitResponse: true,
+      })
+      .expect(200);
+
+    const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+    expect(lastCall[1].headers["X-Internal-Api-Key"]).toBe("test-api-key");
+    expect(lastCall[1].headers[WEBHOOK_SIGNATURE_HEADER]).toBeUndefined();
+
+    // Restore the secret for the remaining tests.
+    await dataSource.query(
+      `UPDATE subscribers SET secret = $1 WHERE service = 'mock-service'`,
+      [subscriberSecret],
+    );
   });
 
   it("webhook payload includes eventId, pattern, payload, source, attempt", async () => {

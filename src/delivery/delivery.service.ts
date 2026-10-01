@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { httpPost } from "api-server-toolkit/helper";
+import { signEventDelivery, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_TIMESTAMP_HEADER } from "api-server-toolkit/helper";
 import { EventEntity, SubscriberEntity, DeliveryEntity, DeliveryStatus } from "@src/database/entities";
 
 export interface DeliveryResult {
@@ -54,11 +55,23 @@ export class DeliveryService {
       ? event.timeout * 1000
       : this.defaultTimeout;
 
+    // Per-subscriber secret → HMAC-signed delivery (preferred transport):
+    // the signature + freshness window authenticates the payload and the
+    // shared internal key stays off the wire entirely. Legacy subscribers
+    // without a secret keep the old shared-key transport.
+    const rawBody = JSON.stringify(payload);
+    const headers: Record<string, string> = {};
+    if (subscriber.secret) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      headers[WEBHOOK_SIGNATURE_HEADER] = signEventDelivery(subscriber.secret, timestamp, rawBody);
+      headers[WEBHOOK_TIMESTAMP_HEADER] = String(timestamp);
+    } else {
+      headers["X-Internal-Api-Key"] = this.apiKey;
+    }
+
     try {
       const response = await httpPost(subscriber.url, payload, {
-        headers: {
-          "X-Internal-Api-Key": this.apiKey,
-        },
+        headers,
         timeout: timeoutMs,
         raw: true,
       });

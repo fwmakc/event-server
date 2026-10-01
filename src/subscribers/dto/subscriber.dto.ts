@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsArray, IsOptional, IsBoolean, ArrayMinSize } from "class-validator";
+import { IsString, IsNotEmpty, IsArray, IsOptional, IsBoolean, ArrayMinSize, MinLength } from "class-validator";
 
 export class CreateSubscriberDto {
   @IsString()
@@ -13,6 +13,19 @@ export class CreateSubscriberDto {
   @ArrayMinSize(1)
   @IsString({ each: true })
   patterns: string[];
+
+  // Optional per-subscriber HMAC secret for signed deliveries. Registrant
+  // (an internal service) brings its own so both sides know it. Without
+  // `secret` the delivery stays on the shared internal-key transport —
+  // set `generateSecret: true` to have one generated and returned once.
+  @IsOptional()
+  @IsString()
+  @MinLength(32)
+  secret?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  generateSecret?: boolean;
 
   @IsOptional()
   @IsBoolean()
@@ -29,6 +42,11 @@ export class UpdateSubscriberDto {
   @IsArray()
   @IsString({ each: true })
   patterns?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MinLength(32)
+  secret?: string;
 
   @IsOptional()
   @IsBoolean()
