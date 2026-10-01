@@ -142,3 +142,31 @@ jobs:
           context: .
           file: event-server/Dockerfile
           push: false
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Runtime dependencies only; high/critical fails the build unless a
+      # dated, justified allowlist entry exists in the script itself.
+      - name: Dependency audit gate (high/critical, runtime)
+        run: node scripts/audit-gate.mjs
+
+      # Software bill of materials, shipped as a CI artifact on every push
+      - name: Generate CycloneDX SBOM
+        run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
