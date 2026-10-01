@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-01
+### Security (Wave 6 audit)
+- **Deliveries no longer follow redirects blindly**: `httpPost` is called with `redirect: "manual"`; every hop is re-validated against the same egress policy as subscription time (`WEBHOOK_EGRESS_MODE`/`WEBHOOK_ALLOW_HOSTS`) — an open redirect on a subscriber must not become an SSRF bridge into the internal network. Only 307/308 are followed (they preserve POST method+body, up to 3 hops); 301/302/303 fail the delivery permanently with a clear response body, and a policy-rejected target is a permanent failure counted by the circuit breaker.
+- **`/contracts/catalog` requires the internal API key** — the contract registry was the only unguarded event-server endpoint (gateway exposure would leak the full event schema inventory).
+- **Contract lookup uses own-property check** — `EventContracts[pattern]` walked the prototype chain, so a pattern like `constructor` resolved to a bogus "schema" and skipped payload validation on non-strict configs. Only real registry keys validate now.
+- **Audit chain `verify(fromId)` works on sparse ranges** — the seed looked up `fromId - 1` exactly, so `verify(1)` always failed («no record before id 1») and any TTL-trimmed history broke mid-range verification. The seed is now the greatest id below `fromId` (genesis when none), and a truncated chain fails loudly as a broken link instead of refusing to verify.
+
+### Changed
+- **Zero-delivery events are no longer finalized as "delivered"**: with no active subscriber the event is re-pended with `deliverAfter` pushed out by `EVENT_NO_SUBSCRIBER_RETRY_MS` (default 60s) — nothing was delivered, and the old mark-as-delivered also lost the race where a subscriber registers (or the circuit breaker reactivates) moments later. If the pattern never gains a subscriber, TTL cleanup deletes the event as usual. Worker spec updated to the new semantics.
+
+### Tests
+- 62 integration tests green (real Postgres); worker spec asserts the re-pend (status stays `pending`, `deliverAfter` in the future, zero delivery rows).
+
 ## [0.8.4] - 2026-10-01
 ### Added
 - **Signed webhook delivery (HMAC-SHA256)**: subscribers can provision a

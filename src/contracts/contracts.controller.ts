@@ -1,5 +1,6 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiExtraModels } from "@nestjs/swagger";
+import { InternalAuthGuard } from "api-server-toolkit/guard";
 import { EventContracts } from "./index";
 import { UserRegisteredDto } from "./dto/user-registered.dto";
 import { UserConfirmedDto } from "./dto/user-confirmed.dto";
@@ -10,6 +11,7 @@ import { WebhookEnvelopeDto } from "./dto/webhook-envelope.dto";
 
 @ApiTags("Event Contracts")
 @Controller("contracts")
+@UseGuards(InternalAuthGuard)
 export class ContractsController {
   @Get("catalog")
   @ApiOperation({ summary: "Реестр всех контрактов событий" })

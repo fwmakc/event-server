@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { createHash } from "node:crypto";
-import { Repository, SelectQueryBuilder } from "typeorm";
+import { LessThan, Repository, SelectQueryBuilder } from "typeorm";
 import { AuditEventEntity } from "@src/database/entities";
 import { AuditEventDto } from "@src/contracts";
 
@@ -137,16 +137,16 @@ export class AuditStoreService {
   }> {
     let cursor = fromId ?? 0;
     let expectedPrev = GENESIS_HASH;
-    // When starting mid-chain, seed the expected prev from the row before it.
+    // When starting mid-chain, seed the expected prev from the greatest id
+    // below it — ids are sparse (TTL cleanup deletes old rows), so `fromId - 1`
+    // may not exist; `verify(fromId = 1)` must also work (nothing below it).
     if (fromId && fromId > 0) {
       const prior = await this.repo.findOne({
-        where: { id: fromId - 1 },
+        where: { id: LessThan(fromId) },
+        order: { id: "DESC" },
         select: ["id", "hash"],
       });
-      if (!prior) {
-        return { valid: false, checked: 0, brokenAt: null, reason: `no record before id ${fromId}` };
-      }
-      expectedPrev = prior.hash;
+      expectedPrev = prior?.hash ?? GENESIS_HASH;
     }
 
     let checked = 0;

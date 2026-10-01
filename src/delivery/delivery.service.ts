@@ -2,8 +2,14 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { httpPost } from "api-server-toolkit/helper";
-import { signEventDelivery, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_TIMESTAMP_HEADER } from "api-server-toolkit/helper";
+import {
+  httpPost,
+  signEventDelivery,
+  validateWebhookEgress,
+  WEBHOOK_SIGNATURE_HEADER,
+  WEBHOOK_TIMESTAMP_HEADER,
+  WebhookEgressMode,
+} from "api-server-toolkit/helper";
 import { EventEntity, SubscriberEntity, DeliveryEntity, DeliveryStatus } from "@src/database/entities";
 
 export interface DeliveryResult {
@@ -13,12 +19,20 @@ export interface DeliveryResult {
   durationMs: number;
 }
 
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+/** Only these keep method+body intact for a POST — everything else would
+ * silently turn the event delivery into a GET on the target. */
+const FOLLOWABLE_REDIRECTS = new Set([307, 308]);
+const MAX_REDIRECT_HOPS = 3;
+
 @Injectable()
 export class DeliveryService {
   private readonly logger = new Logger(DeliveryService.name);
   private readonly apiKey: string;
   private readonly defaultTimeout: number;
   private readonly circuitBreakerThreshold: number;
+  private readonly egressMode: WebhookEgressMode;
+  private readonly egressAllowlist: string[];
 
   constructor(
     private readonly config: ConfigService,
@@ -32,6 +46,13 @@ export class DeliveryService {
     this.apiKey = this.config.get<string>("INTERNAL_API_KEY", "changeme");
     this.defaultTimeout = Number(this.config.get("DEFAULT_HTTP_TIMEOUT_MS", 10000));
     this.circuitBreakerThreshold = Number(this.config.get("CIRCUIT_BREAKER_THRESHOLD", 5));
+    // Same policy the subscription endpoint enforces — re-applied per delivery
+    // hop, because stored URLs and redirect targets are both outbound calls.
+    this.egressMode = (config.get<string>("WEBHOOK_EGRESS_MODE", "internal") || "internal") as WebhookEgressMode;
+    this.egressAllowlist = (config.get<string>("WEBHOOK_ALLOW_HOSTS", "") || "")
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
   }
 
   async deliver(
@@ -70,17 +91,75 @@ export class DeliveryService {
     }
 
     try {
-      const response = await httpPost(subscriber.url, payload, {
+      let targetUrl = subscriber.url;
+      let response = await httpPost(targetUrl, payload, {
         headers,
         timeout: timeoutMs,
         raw: true,
+        // Redirects are followed by hand below: fetch's default `follow`
+        // would hop to any Location unchecked — an open redirect on a
+        // subscriber must not become an SSRF bridge into the network.
+        redirect: "manual",
       });
+
+      let redirectRejection: string | null = null;
+      for (let hop = 0; REDIRECT_STATUSES.has(response.status); hop++) {
+        if (!FOLLOWABLE_REDIRECTS.has(response.status)) {
+          redirectRejection = `redirect ${response.status} changes POST semantics; refusing to re-deliver the event as GET`;
+          break;
+        }
+        if (hop >= MAX_REDIRECT_HOPS) {
+          redirectRejection = `redirect chain exceeded ${MAX_REDIRECT_HOPS} hops`;
+          break;
+        }
+        const location = response.headers?.["location"];
+        if (!location) {
+          redirectRejection = `redirect ${response.status} without a Location header`;
+          break;
+        }
+        const nextUrl = new URL(location, targetUrl).toString();
+        const check = validateWebhookEgress(nextUrl, this.egressMode, this.egressAllowlist);
+        if (!check.ok) {
+          redirectRejection = `redirect target rejected by egress policy (${this.egressMode}): ${check.reason}`;
+          break;
+        }
+        targetUrl = nextUrl;
+        response = await httpPost(targetUrl, payload, {
+          headers,
+          timeout: timeoutMs,
+          raw: true,
+          redirect: "manual",
+        });
+      }
 
       const durationMs = Date.now() - startTime;
 
       const body = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data);
+
+      if (redirectRejection) {
+        // Permanent by nature: the subscriber's redirect config will not fix
+        // itself between retries, and a policy rejection must not be retried.
+        await this.deliveryRepo.update(delivery.id, {
+          status: "failed",
+          attempts: attemptNumber,
+          lastAttemptAt: new Date(),
+          nextAttemptAt: null,
+          responseCode: response.status,
+          responseBody: redirectRejection,
+        });
+
+        this.logger.warn(`Delivery ${delivery.id} to subscriber ${delivery.subscriberId} FAILED permanently (${redirectRejection})`);
+        await this.checkCircuitBreaker(subscriber);
+
+        return {
+          status: "failed",
+          responseCode: response.status,
+          responseBody: redirectRejection,
+          durationMs,
+        };
+      }
 
       if (response.ok) {
         await this.deliveryRepo.update(delivery.id, {

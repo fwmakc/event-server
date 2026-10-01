@@ -44,7 +44,12 @@ export class EventsService {
   }
 
   async publish(dto: PublishEventDto): Promise<PublishResult> {
-    const Schema = EventContracts[dto.pattern];
+    // hasOwnProperty: a prototype member ("constructor", "toString", …) must
+    // not resolve to a "schema" and skip payload validation on non-strict config.
+    const hasSchema = Object.prototype.hasOwnProperty.call(EventContracts, dto.pattern);
+    const Schema = hasSchema
+      ? (EventContracts as Record<string, any>)[dto.pattern]
+      : undefined;
     if (Schema) {
       const instance = plainToInstance(Schema, dto.payload);
       const errors = await validate(instance);

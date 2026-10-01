@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContractsController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const guard_1 = require("api-server-toolkit/guard");
 const index_1 = require("./index");
 const user_registered_dto_1 = require("./dto/user-registered.dto");
 const user_confirmed_dto_1 = require("./dto/user-confirmed.dto");
@@ -38,6 +39,7 @@ __decorate([
 ], ContractsController.prototype, "getCatalog", null);
 exports.ContractsController = ContractsController = __decorate([
     (0, swagger_1.ApiTags)("Event Contracts"),
-    (0, common_1.Controller)("contracts")
+    (0, common_1.Controller)("contracts"),
+    (0, common_1.UseGuards)(guard_1.InternalAuthGuard)
 ], ContractsController);
 //# sourceMappingURL=contracts.controller.js.map

@@ -19,6 +19,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private readonly cleanupInterval: number;
   private readonly batchSize: number;
   private readonly staleTimeout: number;
+  private readonly noSubscriberRetryMs: number;
   private currentDelay: number;
   private destroyed = false;
 
@@ -37,6 +38,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     this.cleanupInterval = Number(this.config.get("CLEANUP_INTERVAL_MS", 3600000));
     this.batchSize = Number(this.config.get("BATCH_SIZE", 50));
     this.staleTimeout = Number(this.config.get("WORKER_STALE_TIMEOUT_MS", 300000));
+    this.noSubscriberRetryMs = Number(this.config.get("EVENT_NO_SUBSCRIBER_RETRY_MS", 60000));
     this.currentDelay = this.workerInterval;
   }
 
@@ -151,7 +153,16 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     }
 
     if (subscribers.length === 0) {
-      await this.eventRepo.update(event.id, { status: "delivered" });
+      // Zero subscribers is not "delivered" — nothing left this server. Finalizing
+      // as delivered hid the event forever, including the race where a subscriber
+      // registers (or the circuit breaker reactivates one) moments later. Re-pend
+      // with a delay instead: if the pattern never gains a subscriber, TTL cleanup
+      // deletes the event as usual.
+      const retryAt = new Date(Date.now() + this.noSubscriberRetryMs);
+      await this.eventRepo.update(event.id, { status: "pending", deliverAfter: retryAt });
+      this.logger.debug(
+        `Event ${event.id} (${event.pattern}) has no active subscriber — re-pended until ${retryAt.toISOString()}`,
+      );
       return;
     }
 

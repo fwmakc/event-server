@@ -216,12 +216,19 @@ describe("Worker — async delivery + retry + cleanup", () => {
         awaitResponse: false,
       });
 
-    const delivered = await waitForCondition(async () => {
+    // Zero-delivery is not "delivered": with no active subscriber the event
+    // is re-pended (deliverAfter pushed out) instead of being finalized as
+    // delivered — a subscriber may still appear before its TTL expires.
+    const rePended = await waitForCondition(async () => {
       const e = await eventRepo.findOne({ where: { id: publishRes.body.eventId } });
-      return e?.status === "delivered";
+      return !!e && e.status === "pending" && e.deliverAfter !== null;
     });
 
-    expect(delivered).toBe(true);
+    expect(rePended).toBe(true);
+
+    const finalEvent = await eventRepo.findOne({ where: { id: publishRes.body.eventId } });
+    expect(finalEvent.status).toBe("pending");
+    expect(new Date(finalEvent.deliverAfter).getTime()).toBeGreaterThan(Date.now() - 1000);
 
     const deliveries = await deliveryRepo.find({
       where: { eventId: publishRes.body.eventId },
