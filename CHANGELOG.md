@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- `tsconfig.build.json`: `rootDir: src` + exclude `scripts` — без него `allowJs` втягивал `scripts/wiring.ts`/`audit-gate.mjs` в компиляцию, и Docker-образ эмитил `dist/src/main.js` (нестартуемо через `CMD dist/main`); тот же режим отказа, что починен в api-server.
+
+### Tests
+- `scripts/wiring.ts`: кредиты БД переопределяются через env (`DB_PASSWORD`), дефолт не изменился.
+
 ### Tests
 - **Wiring check for a real boot** (`scripts/wiring.ts`, `npm run test:wiring`): boots the real `AppModule` in an application context against a fresh `event_server_wiring_test` database (drop/create + real boot migrations — catches entity↔migrations drift), then live probes on real Postgres: subscriber registration with HMAC secret generation, `publish → delivery` (a delivery row actually lands for a registered subscriber), audit hash-chain append (the second entry's `prevHash` equals the first entry's `hash`). 6/6 checks, exit code for CI. Runs via ts-node (this service has no `typeorm-transactional` — no bootstrap call needed, unlike auth/api).
 - CI: new `wiring` job with a TZ matrix (UTC + Europe/Moscow).
