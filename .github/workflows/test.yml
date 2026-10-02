@@ -137,7 +137,7 @@ jobs:
         run: cd api-server-toolkit && npm install --legacy-peer-deps --ignore-scripts && npx tsc
 
       - name: Build Docker image (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: event-server/Dockerfile
