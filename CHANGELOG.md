@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **No-subscriber events now leave the queue (High — queue starvation).**
+  An event whose pattern has no active subscriber (`audit.event` fires on
+  every request) was re-pended forever (+60s each cycle — the late-subscriber
+  race protection). Past a few thousand dead rows the oldest-50 claim query
+  saturated the worker and fresh events with live subscribers
+  (`user.registered` → mail) starved: deliveries silently stopped. The
+  re-pend protection is now bounded: after `EVENT_NO_SUBSCRIBER_TTL_MS`
+  (default 300000) the event is finalized `delivered` without deliveries and
+  leaves the pending pool. `EVENT_NO_SUBSCRIBER_RETRY_MS` (default 60000)
+  controls the re-pend delay within the window.
 - `tsconfig.build.json`: `rootDir: src` + exclude `scripts` — без него `allowJs` втягивал `scripts/wiring.ts`/`audit-gate.mjs` в компиляцию, и Docker-образ эмитил `dist/src/main.js` (нестартуемо через `CMD dist/main`); тот же режим отказа, что починен в api-server.
 
 ### Tests
+- `worker.no-subscriber-ttl.spec.ts` (own app instance — the TTL is read at
+  boot): a fresh no-subscriber event re-pends (the late-subscriber protection
+  stays on), then finalizes after the TTL; a batch of 10 dead events drains
+  to zero pending. 64/64 green under the canonical `jest --runInBand`.
 - `scripts/wiring.ts`: кредиты БД переопределяются через env (`DB_PASSWORD`), дефолт не изменился.
 
 ### Tests

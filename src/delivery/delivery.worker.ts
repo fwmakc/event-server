@@ -20,6 +20,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private readonly batchSize: number;
   private readonly staleTimeout: number;
   private readonly noSubscriberRetryMs: number;
+  private readonly noSubscriberGiveUpMs: number;
   private currentDelay: number;
   private destroyed = false;
 
@@ -39,6 +40,9 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
     this.batchSize = Number(this.config.get("BATCH_SIZE", 50));
     this.staleTimeout = Number(this.config.get("WORKER_STALE_TIMEOUT_MS", 300000));
     this.noSubscriberRetryMs = Number(this.config.get("EVENT_NO_SUBSCRIBER_RETRY_MS", 60000));
+    this.noSubscriberGiveUpMs = Number(
+      this.config.get("EVENT_NO_SUBSCRIBER_TTL_MS", 300000),
+    );
     this.currentDelay = this.workerInterval;
   }
 
@@ -156,8 +160,19 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       // Zero subscribers is not "delivered" — nothing left this server. Finalizing
       // as delivered hid the event forever, including the race where a subscriber
       // registers (or the circuit breaker reactivates one) moments later. Re-pend
-      // with a delay instead: if the pattern never gains a subscriber, TTL cleanup
-      // deletes the event as usual.
+      // with a delay instead — but only for a bounded window: a pattern nobody
+      // will ever hear (audit.event fires on every request) must leave the pool,
+      // otherwise the claim query drowns in immortal noise and fresh events
+      // starve (live: a login-storm audit flood stalled user.registered
+      // deliveries entirely). Past the window the race is over — finalize.
+      const waitedMs = Date.now() - new Date(event.createdAt).getTime();
+      if (this.noSubscriberGiveUpMs > 0 && waitedMs >= this.noSubscriberGiveUpMs) {
+        await this.eventRepo.update(event.id, { status: "delivered" });
+        this.logger.debug(
+          `Event ${event.id} (${event.pattern}) has no active subscriber for ${Math.round(waitedMs / 1000)}s — finalized without deliveries`,
+        );
+        return;
+      }
       const retryAt = new Date(Date.now() + this.noSubscriberRetryMs);
       await this.eventRepo.update(event.id, { status: "pending", deliverAfter: retryAt });
       this.logger.debug(
