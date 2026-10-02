@@ -170,3 +170,41 @@ jobs:
         with:
           name: sbom
           path: sbom.cdx.json
+
+  wiring:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: "1234"
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Wiring — real boot, probe writes (TZ=UTC)
+        run: npm run test:wiring
+
+      - name: Wiring — real boot, probe writes (TZ=Europe/Moscow)
+        run: npm run test:wiring
+        env:
+          TZ: Europe/Moscow

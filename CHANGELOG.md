@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Tests
+- **Wiring check for a real boot** (`scripts/wiring.ts`, `npm run test:wiring`): boots the real `AppModule` in an application context against a fresh `event_server_wiring_test` database (drop/create + real boot migrations — catches entity↔migrations drift), then live probes on real Postgres: subscriber registration with HMAC secret generation, `publish → delivery` (a delivery row actually lands for a registered subscriber), audit hash-chain append (the second entry's `prevHash` equals the first entry's `hash`). 6/6 checks, exit code for CI. Runs via ts-node (this service has no `typeorm-transactional` — no bootstrap call needed, unlike auth/api).
+- CI: new `wiring` job with a TZ matrix (UTC + Europe/Moscow).
+
 ## [0.9.0] - 2026-10-01
 ### Security (Wave 6 audit)
 - **Deliveries no longer follow redirects blindly**: `httpPost` is called with `redirect: "manual"`; every hop is re-validated against the same egress policy as subscription time (`WEBHOOK_EGRESS_MODE`/`WEBHOOK_ALLOW_HOSTS`) — an open redirect on a subscriber must not become an SSRF bridge into the internal network. Only 307/308 are followed (they preserve POST method+body, up to 3 hops); 301/302/303 fail the delivery permanently with a clear response body, and a policy-rejected target is a permanent failure counted by the circuit breaker.

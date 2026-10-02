@@ -35,7 +35,8 @@
     "migration:create": "npm run typeorm migration:create -- -n",
     "migration:run": "npm run typeorm migration:run -- -d ./src/config/typeorm.config.ts",
     "migration:revert": "npm run typeorm migration:revert",
-    "migration:fake": "npm run migration:run -- --fake"
+    "migration:fake": "npm run migration:run -- --fake",
+    "test:wiring": "ts-node -r tsconfig-paths/register scripts/wiring.ts"
   },
   "exports": {
     "./contracts": "./dist/contracts/index.js"
