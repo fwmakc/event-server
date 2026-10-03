@@ -1,8 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EventContracts = exports.AuditEventDto = exports.SubscriberDeactivatedDto = exports.WebhookEnvelopeDto = exports.UserTwoFactorCodeDto = exports.UserDeletedDto = exports.UserDeactivatedDto = exports.PasswordResetDto = exports.UserConfirmedDto = exports.UserRegisteredDto = void 0;
+exports.EventContracts = exports.AuditEventDto = exports.SubscriberDeactivatedDto = exports.WebhookEnvelopeDto = exports.UserTwoFactorCodeDto = exports.UserDeletedDto = exports.UserDeactivatedDto = exports.PasswordResetDto = exports.UserConfirmedDto = exports.UserLoginDto = exports.UserRegisteredDto = void 0;
 var user_registered_dto_1 = require("./dto/user-registered.dto");
 Object.defineProperty(exports, "UserRegisteredDto", { enumerable: true, get: function () { return user_registered_dto_1.UserRegisteredDto; } });
+var user_login_dto_1 = require("./dto/user-login.dto");
+Object.defineProperty(exports, "UserLoginDto", { enumerable: true, get: function () { return user_login_dto_1.UserLoginDto; } });
 var user_confirmed_dto_1 = require("./dto/user-confirmed.dto");
 Object.defineProperty(exports, "UserConfirmedDto", { enumerable: true, get: function () { return user_confirmed_dto_1.UserConfirmedDto; } });
 var password_reset_dto_1 = require("./dto/password-reset.dto");
@@ -20,6 +22,7 @@ Object.defineProperty(exports, "SubscriberDeactivatedDto", { enumerable: true, g
 var audit_event_dto_1 = require("./dto/audit-event.dto");
 Object.defineProperty(exports, "AuditEventDto", { enumerable: true, get: function () { return audit_event_dto_1.AuditEventDto; } });
 const user_registered_dto_2 = require("./dto/user-registered.dto");
+const user_login_dto_2 = require("./dto/user-login.dto");
 const user_confirmed_dto_2 = require("./dto/user-confirmed.dto");
 const password_reset_dto_2 = require("./dto/password-reset.dto");
 const user_deactivated_dto_2 = require("./dto/user-deactivated.dto");
@@ -29,6 +32,7 @@ const subscriber_deactivated_dto_2 = require("./dto/subscriber-deactivated.dto")
 const audit_event_dto_2 = require("./dto/audit-event.dto");
 exports.EventContracts = {
     "user.registered": user_registered_dto_2.UserRegisteredDto,
+    "user.login": user_login_dto_2.UserLoginDto,
     "user.confirmed": user_confirmed_dto_2.UserConfirmedDto,
     "password.reset": password_reset_dto_2.PasswordResetDto,
     "user.deactivated": user_deactivated_dto_2.UserDeactivatedDto,

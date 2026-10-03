@@ -53,6 +53,7 @@ Event-server owns all event contracts as typed DTOs, exported via the npm subpat
 | Pattern | DTO | Required fields |
 |---------|-----|-----------------|
 | `user.registered` | `UserRegisteredDto` | userId, username, email (+ subject?, confirmUrl?) |
+| `user.login` | `UserLoginDto` | userId, username (+ email?, ip?, userAgent?, os?, browser?) — emitted by auth-server on every successful password login (not on 2FA challenge) |
 | `user.confirmed` | `UserConfirmedDto` | userId, username, email |
 | `password.reset` | `PasswordResetDto` | username, email, subject, resetUrl |
 | `user.deactivated` | `UserDeactivatedDto` | userId, username, email |

@@ -1,4 +1,5 @@
 export { UserRegisteredDto } from "./dto/user-registered.dto";
+export { UserLoginDto } from "./dto/user-login.dto";
 export { UserConfirmedDto } from "./dto/user-confirmed.dto";
 export { PasswordResetDto } from "./dto/password-reset.dto";
 export { UserDeactivatedDto } from "./dto/user-deactivated.dto";
@@ -8,6 +9,7 @@ export { WebhookEnvelopeDto } from "./dto/webhook-envelope.dto";
 export { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
 export { AuditEventDto } from "./dto/audit-event.dto";
 import { UserRegisteredDto } from "./dto/user-registered.dto";
+import { UserLoginDto } from "./dto/user-login.dto";
 import { UserConfirmedDto } from "./dto/user-confirmed.dto";
 import { PasswordResetDto } from "./dto/password-reset.dto";
 import { UserDeactivatedDto } from "./dto/user-deactivated.dto";
@@ -17,6 +19,7 @@ import { SubscriberDeactivatedDto } from "./dto/subscriber-deactivated.dto";
 import { AuditEventDto } from "./dto/audit-event.dto";
 export declare const EventContracts: {
     readonly "user.registered": typeof UserRegisteredDto;
+    readonly "user.login": typeof UserLoginDto;
     readonly "user.confirmed": typeof UserConfirmedDto;
     readonly "password.reset": typeof PasswordResetDto;
     readonly "user.deactivated": typeof UserDeactivatedDto;
