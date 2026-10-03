@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **TTL finalization tells the truth; orphaned claims re-pend (Wave 6.1).**
+  Two follow-ups on the bounded re-pend fix above:
+  - A pattern with subscribers that are **all inactive** (circuit breaker
+    after 5 permanent failures) is delivery debt, not noise: past the TTL the
+    event now finalizes `failed` with a warn — visible in the ledger and
+    replayable after reactivation — instead of a silent `delivered` with zero
+    deliveries. A pattern nobody has ever subscribed to still finalizes
+    `delivered` quietly (fire-and-forget by definition, no failed noise for
+    `audit.event`).
+  - A crash between the event claim (`status=processing`) and the
+    delivery-creation pass left a `processing` event with zero delivery rows,
+    which `resolveEvents` counted as fully delivered
+    (`[].every(d => d.delivered)` on an empty array). Such orphans are now
+    re-pended (`EVENT_NO_SUBSCRIBER_RETRY_MS`) instead.
 - **No-subscriber events now leave the queue (High — queue starvation).**
   An event whose pattern has no active subscriber (`audit.event` fires on
   every request) was re-pended forever (+60s each cycle — the late-subscriber
@@ -26,7 +40,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to zero pending. 64/64 green under the canonical `jest --runInBand`.
 - `scripts/wiring.ts`: кредиты БД переопределяются через env (`DB_PASSWORD`), дефолт не изменился.
 
+### Changed
+- `POST /events/:id/replay` on a `failed` event with **zero delivery rows**
+  (the TTL-debt case) requeues the event itself and reports
+  `{replayed: 0, eventRequeued: true}` — previously such events were
+  unreplayable (`result.affected === 0`). A `failed` event that still has a
+  delivery ledger stays a no-op: its deliveries own their retries, and
+  re-running delivery creation would duplicate rows.
+
 ### Tests
+- `worker.no-subscriber-ttl.spec.ts` +2 (Wave 6.1): circuit-broken subscriber —
+  the event finalizes `failed` with zero deliveries, replay while inactive
+  requeues it (`eventRequeued`), reactivation → real delivery lands; an
+  orphaned `processing` event with zero delivery rows is re-pended instead of
+  being counted delivered. 66/66 green under the canonical `jest --runInBand`.
 - **Wiring check for a real boot** (`scripts/wiring.ts`, `npm run test:wiring`): boots the real `AppModule` in an application context against a fresh `event_server_wiring_test` database (drop/create + real boot migrations — catches entity↔migrations drift), then live probes on real Postgres: subscriber registration with HMAC secret generation, `publish → delivery` (a delivery row actually lands for a registered subscriber), audit hash-chain append (the second entry's `prevHash` equals the first entry's `hash`). 6/6 checks, exit code for CI. Runs via ts-node (this service has no `typeorm-transactional` — no bootstrap call needed, unlike auth/api).
 - CI: new `wiring` job with a TZ matrix (UTC + Europe/Moscow).
 

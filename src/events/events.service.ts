@@ -162,8 +162,14 @@ export class EventsService {
 
   /**
    * Requeue every failed delivery of an event. Returns how many were requeued.
+   * A failed event with no delivery rows (TTL-finalized while every subscriber
+   * was circuit-breaker-inactive) has nothing to requeue — the whole event goes
+   * back to `pending`, and the next worker claim recreates deliveries against
+   * whatever subscribers are active now.
    */
-  async replayEvent(eventId: number): Promise<{ eventId: number; replayed: number }> {
+  async replayEvent(
+    eventId: number,
+  ): Promise<{ eventId: number; replayed: number; eventRequeued?: boolean }> {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event) {
       throw new NotFoundException(`Event ${eventId} not found`);
@@ -186,6 +192,22 @@ export class EventsService {
     if (replayed > 0) {
       await this.eventRepo.update(eventId, { status: "processing" });
       this.logger.log(`Event ${eventId} replay: ${replayed} failed delivery(ies) requeued`);
+      return { eventId, replayed };
+    }
+
+    if (event.status === "failed") {
+      // A failed event that still has a delivery ledger is not requeueable
+      // here (its deliveries own their retries; re-running delivery creation
+      // would duplicate rows). Only the no-subscriber TTL finalization leaves
+      // a failed event with zero delivery rows — that debt is replayable.
+      const deliveryCount = await this.deliveryRepo.count({ where: { eventId } });
+      if (deliveryCount === 0) {
+        await this.eventRepo.update(eventId, { status: "pending", deliverAfter: null });
+        this.logger.log(
+          `Event ${eventId} replay: TTL-finalized without deliveries — event requeued for delivery creation`,
+        );
+        return { eventId, replayed: 0, eventRequeued: true };
+      }
     }
 
     return { eventId, replayed };

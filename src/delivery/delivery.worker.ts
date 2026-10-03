@@ -164,13 +164,29 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       // will ever hear (audit.event fires on every request) must leave the pool,
       // otherwise the claim query drowns in immortal noise and fresh events
       // starve (live: a login-storm audit flood stalled user.registered
-      // deliveries entirely). Past the window the race is over — finalize.
+      // deliveries entirely). Past the window the race is over — and the two
+      // zero-subscriber cases get different ledgers: a pattern NOBODY ever
+      // subscribed to was fire-and-forget by definition (quiet finalize), while
+      // subscribers that ALL went inactive (circuit breaker after 5 permanent
+      // failures) are real delivery debt — failed, so operators see it and
+      // replayEvent can re-run the pipeline after reactivation.
       const waitedMs = Date.now() - new Date(event.createdAt).getTime();
       if (this.noSubscriberGiveUpMs > 0 && waitedMs >= this.noSubscriberGiveUpMs) {
-        await this.eventRepo.update(event.id, { status: "delivered" });
-        this.logger.debug(
-          `Event ${event.id} (${event.pattern}) has no active subscriber for ${Math.round(waitedMs / 1000)}s — finalized without deliveries`,
-        );
+        const knownSubscribers = await this.subscriberRepo
+          .createQueryBuilder("sub")
+          .where("sub.patterns @> ARRAY[:pattern]::text[]", { pattern: event.pattern })
+          .getCount();
+        if (knownSubscribers > 0) {
+          await this.eventRepo.update(event.id, { status: "failed" });
+          this.logger.warn(
+            `Event ${event.id} (${event.pattern}) had subscribers, all inactive for ${Math.round(waitedMs / 1000)}s (circuit breaker?) — finalized as failed; replay after reactivation`,
+          );
+        } else {
+          await this.eventRepo.update(event.id, { status: "delivered" });
+          this.logger.debug(
+            `Event ${event.id} (${event.pattern}) has no subscriber ever, ${Math.round(waitedMs / 1000)}s — finalized without deliveries`,
+          );
+        }
         return;
       }
       const retryAt = new Date(Date.now() + this.noSubscriberRetryMs);
@@ -295,11 +311,22 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
 
     const deliveredIds: number[] = [];
     const failedIds: number[] = [];
+    const orphanedIds: number[] = [];
     const eventsToDelete: number[] = [];
     const deliveriesToDelete: number[] = [];
 
     for (const event of processingEvents) {
       const deliveries = deliveriesByEvent.get(event.id) ?? [];
+
+      // A processing event with zero delivery rows lost its creation pass
+      // (crash or kill between the claim and the delivery save). The empty
+      // array would satisfy every() and lie "delivered" — re-pend it for a
+      // gentle retry instead; the next claim recreates deliveries (and the
+      // no-subscriber TTL path still bounds patterns nobody hears).
+      if (deliveries.length === 0) {
+        orphanedIds.push(event.id);
+        continue;
+      }
 
       const hasPending = deliveries.some(
         (d) => d.status === "pending" || d.status === "processing",
@@ -337,6 +364,14 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
         .update()
         .set({ status: "failed" })
         .where("id IN (:...ids)", { ids: failedIds })
+        .execute();
+    }
+    if (orphanedIds.length > 0) {
+      await this.eventRepo
+        .createQueryBuilder()
+        .update()
+        .set({ status: "pending", deliverAfter: new Date(Date.now() + this.noSubscriberRetryMs) })
+        .where("id IN (:...ids)", { ids: orphanedIds })
         .execute();
     }
 
