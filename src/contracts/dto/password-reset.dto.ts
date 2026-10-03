@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsString } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
 export class PasswordResetDto {
   @ApiProperty({ description: "Username (email)" })
@@ -10,9 +10,13 @@ export class PasswordResetDto {
   @IsString()
   email: string;
 
-  @ApiProperty({ description: "Тема письма" })
+  // consumer (message-server) defaults to "Password Reset" — the publisher
+  // (auth reset handler) takes it from the client body, which legitimately
+  // omits it; a required subject here silently killed reset mails
+  @ApiProperty({ description: "Тема письма", required: false })
+  @IsOptional()
   @IsString()
-  subject: string;
+  subject?: string;
 
   @ApiProperty({ description: "URL сброса пароля" })
   @IsString()

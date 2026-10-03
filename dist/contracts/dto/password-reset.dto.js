@@ -26,7 +26,8 @@ __decorate([
     __metadata("design:type", String)
 ], PasswordResetDto.prototype, "email", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: "Тема письма" }),
+    (0, swagger_1.ApiProperty)({ description: "Тема письма", required: false }),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PasswordResetDto.prototype, "subject", void 0);
