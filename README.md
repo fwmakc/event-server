@@ -588,13 +588,11 @@ Content-Type: application/json
 1. SELECT events
    WHERE status = 'pending'
      AND deliver_after <= NOW()           -- respects delay
-   ORDER BY
-     CASE priority
-       WHEN 'high'   THEN 0
-       WHEN 'normal' THEN 1
-       WHEN 'low'    THEN 2
-     END,
-     created_at ASC
+   ORDER BY priority_rank, created_at ASC
+   -- priority_rank is a stored generated column (CASE over priority) backed
+   -- by the partial idx_events_claim (status, priority_rank, created_at)
+   -- WHERE status='pending': the claim is an O(BATCH) index scan at ANY
+   -- backlog size, not a sort of the whole due backlog (journal 14)
    LIMIT BATCH_SIZE
 
 2. For each event:
@@ -618,6 +616,31 @@ Content-Type: application/json
 5. If all deliveries for an event are resolved:
    - Mark event as 'delivered' (if all succeeded) or 'failed' (if any failed)
 ```
+
+### Capacity model (journal 14 — measured, storm14 harness)
+
+The claim drains at most `BATCH_SIZE` events per cycle: stock defaults
+(50 / 500ms adaptive) sustain **~100 events/s**. If sustained inflow exceeds
+the drain rate, the due backlog grows **unboundedly** and — because claiming
+is FIFO inside a priority rank — same-rank honest events starve behind the
+flood (measured: a 126/s no-subscriber `audit.event` flood stalled
+`password.reset` deliveries at p95 33.6s; 226 of 1501 delivered in the
+storm window).
+
+Two mechanisms keep honest traffic safe:
+
+- **Priority separation** — bulk/noise publishers MUST use `priority: "low"`
+  (the toolkit `AuditService` does since v0.29.1): low-rank zombies never
+  delay normal-rank operational events. Same flood with the separation in
+  place: p95 0.6s, 1500/1500 delivered, backlog unchanged.
+- **Flat claim cost** — the `priority_rank` generated column + partial index
+  keep the claim O(BATCH) regardless of backlog (0.3ms measured at 26k+ due
+  rows), so a large backlog costs scheduling headroom, not CPU or lock time.
+
+Operational levers under flood: raise `BATCH_SIZE` / lower
+`WORKER_INTERVAL_MS` to raise the drain ceiling, and lower
+`EVENT_NO_SUBSCRIBER_RETRY_MS` / `EVENT_NO_SUBSCRIBER_TTL_MS` to finalize
+no-subscriber noise faster (both documented above).
 
 ### TTL cleanup (every `CLEANUP_INTERVAL_MS`)
 
