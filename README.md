@@ -659,6 +659,18 @@ WORKER_MAX_INTERVAL_MS=2000     # adaptive backoff ceiling
 CLEANUP_INTERVAL_MS=3600000     # TTL cleanup cycle (default: 3600000 = 1h)
 BATCH_SIZE=50                   # max events/deliveries per cycle
 
+# No-subscriber lifecycle
+EVENT_NO_SUBSCRIBER_RETRY_MS=60000   # re-pend interval for events with no subscriber (default: 60s)
+EVENT_NO_SUBSCRIBER_TTL_MS=300000    # give up after this long with no subscriber (default: 300s = 5 min)
+# Finalization at TTL: pattern NEVER had a subscriber -> event is marked delivered
+# (quietly — publishing must not depend on consumers existing yet); subscribers
+# existed but are ALL inactive (circuit breaker) -> event is marked failed.
+# Operational note: each no-subscriber re-pend keeps the event in the due
+# backlog that the claim query sorts in full every cycle, so a flood of
+# no-subscriber events (e.g. audit.event with no audit consumer) lengthens the
+# claim critical section and degrades honest delivery latency on a shared
+# database. Lower the two values to drain such floods faster.
+
 # HTTP client (webhook delivery)
 DEFAULT_HTTP_TIMEOUT_MS=10000   # default timeout (overridden by event.timeout)
 
