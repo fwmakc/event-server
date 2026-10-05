@@ -106,7 +106,7 @@ describe("Worker — no-subscriber events leave the queue after the TTL", () => 
   }, 15000);
 
   it("queue sheds a batch of dead events instead of accumulating them", async () => {
-    const publish = (tick: number) =>
+    const publishOnce = (tick: number) =>
       request(app.getHttpServer())
         .post("/events")
         .set(headers)
@@ -117,7 +117,19 @@ describe("Worker — no-subscriber events leave the queue after the TTL", () => 
           awaitResponse: false,
         });
 
-    await Promise.all(Array.from({ length: 10 }, (_, i) => publish(i)));
+    // sequential with one retry: a CI burst can hit a transient
+    // ECONNRESET from the test http server — the invariant under test
+    // (shedding after the TTL) does not depend on concurrency
+    const publish = async (tick: number) => {
+      try {
+        return await publishOnce(tick);
+      } catch {
+        await sleep(200);
+        return publishOnce(tick);
+      }
+    };
+
+    for (let i = 0; i < 10; i++) await publish(i);
 
     const drained = await waitForCondition(async () => {
       const pending = await eventRepo.count({
