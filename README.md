@@ -58,7 +58,11 @@ Event-server owns all event contracts as typed DTOs, exported via the npm subpat
 | `password.reset` | `PasswordResetDto` | username, email, subject, resetUrl |
 | `user.deactivated` | `UserDeactivatedDto` | userId, username, email |
 | `user.deleted` | `UserDeletedDto` | userId, username, email |
+| `user.two_factor_code` | `UserTwoFactorCodeDto` | userId, username, email, code (+ subject?) |
+| `audit.event` | `AuditEventDto` | action (dot-path); optional outcome, accountId, username, tenantId, ip, userAgent, requestId, targetType, targetId, details |
 | `subscriber.deactivated` | `SubscriberDeactivatedDto` | subscriberId, service, url, failures, deactivatedAt |
+| `mail.bounced` | `MailBouncedDto` | email, provider, type (`hard`\|`soft`), bouncedAt (+ reason?, messageId?) — hard bounces are suppression candidates |
+| `mail.complained` | `MailComplainedDto` | email, provider, complainedAt (+ reason?, messageId?) — the recipient marked mail as spam |
 | *(webhook envelope)* | `WebhookEnvelopeDto` | eventId, pattern, payload, source, timestamp, attempt |
 
 ### Importing contracts
