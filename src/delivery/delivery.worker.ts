@@ -108,12 +108,11 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
         .setOnLocked("skip_locked")
         .where("e.status = :status", { status: "pending" })
         .andWhere("(e.deliverAfter IS NULL OR e.deliverAfter <= :now)", { now })
-        .orderBy(
-          `CASE e.priority 
-            WHEN 'high' THEN 0 
-            WHEN 'normal' THEN 1 
-            ELSE 2 END`,
-        )
+        // priorityRank is a stored generated CASE over priority — this
+        // orderBy is served by idx_events_claim (status, priority_rank,
+        // created_at) as an index scan, so claiming stays O(batch) even
+        // when the due backlog is huge (journal 14)
+        .orderBy("e.priorityRank", "ASC")
         .addOrderBy("e.createdAt", "ASC")
         .take(this.batchSize)
         .getMany();
