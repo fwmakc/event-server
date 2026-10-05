@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- **No-subscriber TTL age is measured with the DB clock, not the app clock.**
+  The worker compared `Date.now()` (app) against `created_at` (written by the
+  database) — any app/database clock skew (docker VM drift, multi-node drift)
+  inflated the apparent age. With a short `EVENT_NO_SUBSCRIBER_TTL_MS` a fresh
+  event could finalize on its very first claim, skipping the re-pend window
+  entirely (surfaced as a flaky `worker.no-subscriber-ttl.spec.ts` under a
+  ~1.5-2s host/VM drift on Windows/Docker Desktop). The claim query now selects
+  `now() - created_at` from the database and the TTL decision uses that value —
+  age semantics live in one clock domain.
 - **TTL finalization tells the truth; orphaned claims re-pend (Wave 6.1).**
   Two follow-ups on the bounded re-pend fix above:
   - A pattern with subscribers that are **all inactive** (circuit breaker

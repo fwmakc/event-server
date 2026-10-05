@@ -99,40 +99,58 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private async processPendingEvents(): Promise<boolean> {
     const now = new Date();
 
-    const events = await this.eventRepo.manager.transaction(async (manager) => {
-      const repo = manager.getRepository(EventEntity);
+    const { events, waitedMs } = await this.eventRepo.manager.transaction(
+      async (manager) => {
+        const repo = manager.getRepository(EventEntity);
 
-      const events = await repo
-        .createQueryBuilder("e")
-        .setLock("pessimistic_write")
-        .setOnLocked("skip_locked")
-        .where("e.status = :status", { status: "pending" })
-        .andWhere("(e.deliverAfter IS NULL OR e.deliverAfter <= :now)", { now })
-        // priorityRank is a stored generated CASE over priority — this
-        // orderBy is served by idx_events_claim (status, priority_rank,
-        // created_at) as an index scan, so claiming stays O(batch) even
-        // when the due backlog is huge (journal 14)
-        .orderBy("e.priorityRank", "ASC")
-        .addOrderBy("e.createdAt", "ASC")
-        .take(this.batchSize)
-        .getMany();
-
-      if (events.length > 0) {
-        await repo
+        // The no-subscriber age is measured with the DB clock (now() -
+        // created_at), not Date.now(): created_at is written by the database,
+        // so app/database clock skew (docker VM drift, multi-node drift)
+        // would inflate the apparent age — with a short TTL a fresh event
+        // would finalize on its very first claim, skipping re-pend entirely.
+        const claimed = await repo
           .createQueryBuilder("e")
-          .update()
-          .set({ status: "processing" })
-          .where("id IN (:...ids)", { ids: events.map((e) => e.id) })
-          .execute();
-      }
+          .setLock("pessimistic_write")
+          .setOnLocked("skip_locked")
+          .where("e.status = :status", { status: "pending" })
+          .andWhere("(e.deliverAfter IS NULL OR e.deliverAfter <= :now)", { now })
+          // priorityRank is a stored generated CASE over priority — this
+          // orderBy is served by idx_events_claim (status, priority_rank,
+          // created_at) as an index scan, so claiming stays O(batch) even
+          // when the due backlog is huge (journal 14)
+          .orderBy("e.priorityRank", "ASC")
+          .addOrderBy("e.createdAt", "ASC")
+          .addSelect(
+            "EXTRACT(EPOCH FROM (now() - e.created_at)) * 1000",
+            "waited_ms",
+          )
+          .take(this.batchSize)
+          .getRawAndEntities();
 
-      return events;
-    });
+        const events = claimed.entities;
+
+        if (events.length > 0) {
+          await repo
+            .createQueryBuilder("e")
+            .update()
+            .set({ status: "processing" })
+            .where("id IN (:...ids)", { ids: events.map((e) => e.id) })
+            .execute();
+        }
+
+        return {
+          events,
+          waitedMs: claimed.raw.map((r) => Number(r.waited_ms)),
+        };
+      },
+    );
 
     const subscriberCache = new Map<string, SubscriberEntity[]>();
 
     await Promise.all(
-      events.map((event) => this.createDeliveriesForEvent(event, subscriberCache)),
+      events.map((event, i) =>
+        this.createDeliveriesForEvent(event, subscriberCache, waitedMs[i]),
+      ),
     );
 
     return events.length > 0;
@@ -141,6 +159,7 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
   private async createDeliveriesForEvent(
     event: EventEntity,
     subscriberCache?: Map<string, SubscriberEntity[]>,
+    waitedMs?: number,
   ) {
     let subscribers: SubscriberEntity[];
 
@@ -169,8 +188,9 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
       // subscribers that ALL went inactive (circuit breaker after 5 permanent
       // failures) are real delivery debt — failed, so operators see it and
       // replayEvent can re-run the pipeline after reactivation.
-      const waitedMs = Date.now() - new Date(event.createdAt).getTime();
-      if (this.noSubscriberGiveUpMs > 0 && waitedMs >= this.noSubscriberGiveUpMs) {
+      const waited =
+        waitedMs ?? Date.now() - new Date(event.createdAt).getTime();
+      if (this.noSubscriberGiveUpMs > 0 && waited >= this.noSubscriberGiveUpMs) {
         const knownSubscribers = await this.subscriberRepo
           .createQueryBuilder("sub")
           .where("sub.patterns @> ARRAY[:pattern]::text[]", { pattern: event.pattern })
@@ -178,12 +198,12 @@ export class DeliveryWorker implements OnModuleInit, OnModuleDestroy {
         if (knownSubscribers > 0) {
           await this.eventRepo.update(event.id, { status: "failed" });
           this.logger.warn(
-            `Event ${event.id} (${event.pattern}) had subscribers, all inactive for ${Math.round(waitedMs / 1000)}s (circuit breaker?) — finalized as failed; replay after reactivation`,
+            `Event ${event.id} (${event.pattern}) had subscribers, all inactive for ${Math.round(waited / 1000)}s (circuit breaker?) — finalized as failed; replay after reactivation`,
           );
         } else {
           await this.eventRepo.update(event.id, { status: "delivered" });
           this.logger.debug(
-            `Event ${event.id} (${event.pattern}) has no subscriber ever, ${Math.round(waitedMs / 1000)}s — finalized without deliveries`,
+            `Event ${event.id} (${event.pattern}) has no subscriber ever, ${Math.round(waited / 1000)}s — finalized without deliveries`,
           );
         }
         return;

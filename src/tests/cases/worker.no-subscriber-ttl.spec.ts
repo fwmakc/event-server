@@ -53,6 +53,12 @@ describe("Worker — no-subscriber events leave the queue after the TTL", () => 
 
   beforeAll(async () => {
     process.env.WORKER_INTERVAL_MS = "100";
+    // idle backoff must stay off here: after a quiet boot the adaptive delay
+    // doubles up to WORKER_MAX_INTERVAL_MS (default 2000ms), so the first
+    // claim can legitimately land past the 1500ms TTL and finalize the fresh
+    // event with no observable re-pend window — this spec tests TTL
+    // semantics, not backoff pacing
+    process.env.WORKER_MAX_INTERVAL_MS = "100";
     process.env.EVENT_NO_SUBSCRIBER_TTL_MS = "1500";
     // short re-pend delay: the finalized event is only seen by the worker
     // after the previous re-pend's deliverAfter expires (claim filter)
