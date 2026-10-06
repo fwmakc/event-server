@@ -12,7 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   username; optional: email, ip, userAgent, os, browser. Registered in
   `EventContracts`, shipped in `dist/contracts/`.
 
-## [Unreleased]
+## [0.10.0] - 2026-10-06
+### Added
+- **Audit retention CLI (`src/scripts/audit-retention.ts`)** — manual
+  export/purge primitives for the append-only store, cron-wirable (the
+  schedule stays outside the service). Three modes: export+purge (default,
+  safe order enforced — export → archive re-verify → purge), `--export-only`,
+  `--purge-only` (requires `--force`: destroying unarchived records must be
+  explicit). Ranges by `--before <date>` and/or `--to-id <id>`; deletes run
+  in batches to keep transactions short. Exports stream NDJSON (one row per
+  line, chain fields included) through sha256 into a gzip archive plus a
+  `.meta.json` sidecar carrying the chain boundary (`lastId`/`lastHash` —
+  the seed for post-purge verification) and the uncompressed digest. Runs
+  under a `pg_try_advisory_lock` — overlapping cron invocations are rejected
+  with exit code 1. A purge appends `audit.purged` through the normal
+  chained path, documenting the truncation in the journal itself. Exit
+  codes: 0 ok, 1 misuse/lock, 2 archive verification failure (purge
+  aborted), 3 unexpected.
+- **`GET /audit/verify?baseHash=`** — seeds the expected prev-hash when the
+  boundary row is gone (post-purge chain-base verification from the export
+  meta). Validated as 64-hex (400 otherwise); a real row at/below the range
+  always wins over the supplied base.
+- `verify(fromId)` contract made self-consistent: an existing boundary row
+  is trusted and its own hash seeds the walk (before, the seed was taken
+  from the row below, which only ever matched when the boundary id was
+  absent).
+
 ### Fixed
 - **No-subscriber TTL age is measured with the DB clock, not the app clock.**
   The worker compared `Date.now()` (app) against `created_at` (written by the

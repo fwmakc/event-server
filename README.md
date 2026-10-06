@@ -558,6 +558,114 @@ HTTP 200
 
 ---
 
+## Audit store (tamper-evident)
+
+The `audit.event` pattern is persisted into an append-only `audit_events`
+table with a SHA-256 hash chain: every row stores `prev_hash` (the hash of
+the previous row) and `hash = sha256(prev_hash | ts | fields)`; append
+reads the chain head and inserts in one transaction under an advisory
+lock, so concurrent publishers cannot fork the chain. Any later edit or
+deletion breaks the chain and is reported by `GET /audit/verify`
+(`brokenAt`). This makes silent tampering **detectable** — the store is
+tamper-evident, not tamper-proof: someone with full DB access can rebuild
+a chain, so for strong guarantees export archives out of the database
+(retention below) and keep their digests elsewhere.
+
+Publishers are automatic: the toolkit `AuditInterceptor` records every
+successful mutating request (`data.created/updated/deleted`), the
+`AccessGuard` records `access.denied` on 403, and auth-server emits its
+full security catalog (`auth.*`). What a service produces at all is
+decided by the toolkit-side filter (`AUDIT_ENABLED` / `AUDIT_INCLUDE` /
+`AUDIT_EXCLUDE`) — see the toolkit README.
+
+### GET /audit/events — Query the journal
+
+Requires `X-Internal-Api-Key`. Parameters (all optional):
+
+| Param | Meaning |
+|-------|---------|
+| `actionPrefix` | dot-path prefix, e.g. `auth.login` |
+| `outcome` | `allow` / `deny` / `success` / `failure` |
+| `accountId` | acting account id |
+| `targetType`, `targetId` | what was acted upon |
+| `from`, `to` | `created_at` range |
+| `page`, `limit` | pagination (`limit` max 100, default 20) |
+
+### GET /audit/verify — Verify the hash chain
+
+Requires `X-Internal-Api-Key`. Re-walks the chain recomputing every hash:
+
+```json
+{ "valid": true, "checked": 42112, "brokenAt": null }
+```
+
+- `fromId` — id of the **boundary row**: if it exists, its own hash seeds
+  the walk (rows above it are checked, the boundary row itself is
+  trusted); if it was purged, the seed is the greatest surviving row below
+  it.
+- `toId` — cap of the walk.
+- `baseHash` — 64-hex seed used when nothing survives below `fromId`
+  (after a prefix purge): the boundary hash recorded in the retention
+  export meta. A real row at/below the range always wins over a supplied
+  base; malformed values are rejected with 400.
+
+### Retention: export / purge (manual commands, cron-wirable)
+
+Append-only does not mean forever-by-accident. Retention is an operator
+decision — there is **no in-service scheduler by design**; wire the CLI to
+cron yourself:
+
+```bash
+# export + purge (default; safe order enforced: export -> verify archive -> purge)
+node -r tsconfig-paths/register dist/scripts/audit-retention.js --before 2026-09-01 --out ./audit-archives
+
+# export without deleting
+node -r tsconfig-paths/register dist/scripts/audit-retention.js --before 2026-09-01 --export-only
+
+# purge without export (destroying unarchived records must be explicit)
+node -r tsconfig-paths/register dist/scripts/audit-retention.js --to-id 42000 --purge-only --force
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--before <date>` | rows with `created_at < date` (ISO or `YYYY-MM-DD`) |
+| `--to-id <n>` | rows with `id <= n` (combine with `--before`) |
+| `--out <dir>` | archive directory (default `./audit-archives`) |
+| `--batch <n>` | delete/export page size (default 5000) |
+| `--export-only` / `--purge-only` | single-mode runs |
+| `--force` | required for purge without export |
+| `--no-verify` | skip the post-export archive re-verification (discouraged) |
+
+A run produces `audit-export-<stamp>.ndjson.gz` (one row per line, chain
+fields included, gzip-compressed) plus a `.meta.json` sidecar: row count,
+`firstId`/`firstPrevHash`, `lastId`/`lastHash` (the **chain base for what
+remains**), the uncompressed sha256 and `verified: true`. Keep the meta
+files — they anchor post-purge verification.
+
+Notes:
+
+- After purging a prefix the in-DB chain starts at the first surviving
+  row whose `prev_hash` references a deleted row — that is expected.
+  Prove the window with
+  `GET /audit/verify?fromId=<survivor>&baseHash=<meta.lastHash>`; the
+  archives themselves re-verify offline (every row carries its own hash
+  and linkage from the second row on).
+- Each purge appends an `audit.purged` record through the normal chained
+  path — the journal documents its own truncation (range, row count,
+  archive name, chain base).
+- Runs hold a session advisory lock: an overlapping second run exits with
+  code 1 instead of interleaving.
+- Exit codes: `0` ok; `1` misuse or lock held; `2` archive failed
+  verification — purge aborted (delete the bad archive, re-run); `3`
+  unexpected error.
+- Deletes are batched (`--batch`) so transactions stay short and
+  autovacuum keeps up; freed pages are reused by new rows. If volumes
+  ever outgrow this, monthly partitioning (`DROP PARTITION`) is the
+  recorded growth path — deliberately not built while batched deletes
+  cover the real load.
+
+---
+
 ## Webhook format
 
 When event-server delivers an event to a subscriber:

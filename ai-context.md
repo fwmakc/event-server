@@ -1,11 +1,20 @@
 # AI Context — event-server
 
 > Auto-generated. Run `npm run ai-context` to regenerate.
-> Generated: 2026-09-28T16:46:30.237Z
+> Generated: 2026-10-06T05:47:03.790Z
 
 ---
 
 ## Controllers
+
+### AuditController
+
+Base path: `/audit`
+
+| Method | Path |
+|--------|------|
+| `GET` | `/audit/events` |
+| `GET` | `/audit/verify` |
 
 ### ContractsController [Event Contracts]
 
@@ -32,17 +41,53 @@ Base path: `/contracts`
 | `POST` | `/subscribe` |
 | `PATCH` | `/subscribe/:id` |
 | `DELETE` | `/subscribe/:id` |
+| `POST` | `/subscribe/:id/rotate` |
 | `GET` | `/subscribers` |
 
 ---
 
 ## Services
 
+### AuditStoreService
+
+- `canonicalJson(value: unknown): string`
+- `computeAuditHash(prevHash: string,
+  ts: Date,
+  entry: {
+    action: string;
+    outcome: string;
+    accountId?: number | null;
+    accountUsername?: string | null;
+    tenantId?: number | null;
+    ip?: string | null;
+    userAgent?: string | null;
+    requestId?: string | null;
+    targetType?: string | null;
+    targetId?: string | null;
+    details?: Record<string, unknown> | null;
+  },): string`
+- `canonicalJson(entry.details): "",
+  ].join("|")`
+- `append(dto: AuditEventDto): Promise<AuditEventEntity>`
+- `verify(fromId?: number,
+    toId?: number,
+    baseHash?: string,): Promise<`
+- `gone(purge): ids are sparse, so look for the
+        // greatest surviving row below it — `fromId - 1` itself may not exist
+        const prior = await this.repo.findOne(`
+- `findMany(query: AuditQuery): Promise<`
+- `min(query.limit, 100): 20`
+
 ### DeliveryService
 
 - `deliver(event: EventEntity,
     subscriber: SubscriberEntity,
     delivery: DeliveryEntity,): Promise<DeliveryResult>`
+- `delivery(preferred transport): // the signature + freshness window authenticates the payload and the
+    // shared internal key stays off the wire entirely. Legacy subscribers
+    // without a secret keep the old shared-key transport.
+    const rawBody = JSON.stringify(payload)`
+- `policy(${this.egressMode}): $`
 - `handleFailure(delivery: DeliveryEntity,
     event: EventEntity,
     subscriber: SubscriberEntity,
@@ -56,7 +101,7 @@ Base path: `/contracts`
 
 - `publish(dto: PublishEventDto): Promise<PublishResult>`
 - `processSync(event: EventEntity): Promise<PublishResult>`
-- `replayEvent(eventId: number): Promise<`
+- `replayEvent(eventId: number,): Promise<`
 - `replayDelivery(id: number): Promise<DeliveryEntity>`
 - `findMatchingSubscribers(pattern: string): Promise<SubscriberEntity[]>`
 - `findOne(id: number): Promise<EventEntity | null>`
@@ -65,8 +110,14 @@ Base path: `/contracts`
 
 ### SubscribersService
 
-- `create(dto: CreateSubscriberDto): Promise<SubscriberEntity>`
-- `update(id: number, dto: UpdateSubscriberDto): Promise<SubscriberEntity>`
+- `validateUrl(url: string): void`
+- `BadRequestException(`Subscriber URL rejected by egress policy (${this.egressMode}): $`
+- `create(dto: CreateSubscriberDto): Promise<SubscriberPublic &`
+- `generateWebhookSecret(): null),
+      active: dto.active ?? true,
+    })`
+- `update(id: number, dto: UpdateSubscriberDto): Promise<SubscriberPublic>`
+- `rotateSecret(id: number): Promise<`
 - `remove(id: number): Promise<`
 - `findAll(): Promise<`
 - `findOne(id: number): Promise<SubscriberEntity | null>`
@@ -74,6 +125,9 @@ Base path: `/contracts`
 ---
 
 ## Entities
+
+### AuditEventEntity (table: `audit_events`)
+
 
 ### DeliveryEntity (table: `deliveries`)
 
@@ -88,13 +142,48 @@ Base path: `/contracts`
 
 ## DTOs
 
+### AuditEventDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `action` | `string` | no |
+| `outcome` | `string` | yes |
+| `accountId` | `number` | yes |
+| `accountUsername` | `string` | yes |
+| `tenantId` | `number` | yes |
+| `ip` | `string` | yes |
+| `userAgent` | `string` | yes |
+| `requestId` | `string` | yes |
+| `targetType` | `string` | yes |
+| `targetId` | `string` | yes |
+
+### MailBouncedDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `email` | `string` | no |
+| `provider` | `string` | no |
+| `reason` | `string` | yes |
+| `messageId` | `string` | yes |
+| `bouncedAt` | `string` | no |
+
+### MailComplainedDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `email` | `string` | no |
+| `provider` | `string` | no |
+| `reason` | `string` | yes |
+| `messageId` | `string` | yes |
+| `complainedAt` | `string` | no |
+
 ### PasswordResetDto
 
 | Field | Type | Optional |
 |-------|------|----------|
 | `username` | `string` | no |
 | `email` | `string` | no |
-| `subject` | `string` | no |
+| `subject` | `string` | yes |
 | `resetUrl` | `string` | no |
 
 ### SubscriberDeactivatedDto
@@ -131,6 +220,18 @@ Base path: `/contracts`
 | `username` | `string` | no |
 | `email` | `string` | no |
 
+### UserLoginDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `userId` | `number` | no |
+| `username` | `string` | no |
+| `email` | `string` | yes |
+| `ip` | `string` | yes |
+| `userAgent` | `string` | yes |
+| `os` | `string` | yes |
+| `browser` | `string` | yes |
+
 ### UserRegisteredDto
 
 | Field | Type | Optional |
@@ -140,6 +241,16 @@ Base path: `/contracts`
 | `email` | `string` | no |
 | `subject` | `string` | yes |
 | `confirmUrl` | `string` | yes |
+
+### UserTwoFactorCodeDto
+
+| Field | Type | Optional |
+|-------|------|----------|
+| `userId` | `number` | no |
+| `username` | `string` | no |
+| `email` | `string` | no |
+| `code` | `string` | no |
+| `subject` | `string` | yes |
 
 ### WebhookEnvelopeDto
 
@@ -173,7 +284,10 @@ Base path: `/contracts`
 | `service` | `string` | no |
 | `url` | `string` | no |
 | `patterns` | `string[]` | no |
+| `secret` | `string` | yes |
+| `generateSecret` | `boolean` | yes |
 | `active` | `boolean` | yes |
 | `url` | `string` | yes |
 | `patterns` | `string[]` | yes |
+| `secret` | `string` | yes |
 | `active` | `boolean` | yes |

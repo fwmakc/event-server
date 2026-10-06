@@ -75,6 +75,32 @@ describe("Audit — append-only hash-chained store", () => {
     expect(res.body.checked).toBeGreaterThanOrEqual(3);
   });
 
+  it("accepts baseHash when it matches the chain base", async () => {
+    const res = await request(app.getHttpServer())
+      .get("/audit/verify")
+      .query({ baseHash: "0".repeat(64) }) // this table still chains from genesis
+      .set(headers)
+      .expect(200);
+    expect(res.body.valid).toBe(true);
+  });
+
+  it("a real row below the range wins over the supplied baseHash", async () => {
+    const res = await request(app.getHttpServer())
+      .get("/audit/verify")
+      .query({ fromId: "2", baseHash: "f".repeat(64) })
+      .set(headers)
+      .expect(200);
+    expect(res.body.valid).toBe(true);
+  });
+
+  it("rejects a malformed baseHash", async () => {
+    await request(app.getHttpServer())
+      .get("/audit/verify")
+      .query({ baseHash: "not-hex" })
+      .set(headers)
+      .expect(400);
+  });
+
   it("filters the query endpoint", async () => {
     const res = await request(app.getHttpServer())
       .get("/audit/events")

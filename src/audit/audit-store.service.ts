@@ -128,25 +128,44 @@ export class AuditStoreService {
   /**
    * Re-walk the chain recomputing every hash. Returns the id of the first
    * broken link (or null when the chain holds).
+   *
+   * `fromId` is the id of the boundary row: when it exists its own hash
+   * seeds the walk (rows above it are checked, the boundary row itself is
+   * trusted); when it does not (a purged range boundary) the seed is the
+   * greatest surviving row below it, or — after a prefix purge wiped those
+   * too — `baseHash`, the boundary hash recorded in the retention export
+   * meta. `toId` caps the walk.
    */
-  async verify(fromId?: number, toId?: number): Promise<{
+  async verify(
+    fromId?: number,
+    toId?: number,
+    baseHash?: string,
+  ): Promise<{
     valid: boolean;
     checked: number;
     brokenAt: number | null;
     reason?: string;
   }> {
     let cursor = fromId ?? 0;
-    let expectedPrev = GENESIS_HASH;
-    // When starting mid-chain, seed the expected prev from the greatest id
-    // below it — ids are sparse (TTL cleanup deletes old rows), so `fromId - 1`
-    // may not exist; `verify(fromId = 1)` must also work (nothing below it).
+    let expectedPrev =
+      baseHash !== undefined && /^[0-9a-f]{64}$/i.test(baseHash) ? baseHash : GENESIS_HASH;
     if (fromId && fromId > 0) {
-      const prior = await this.repo.findOne({
-        where: { id: LessThan(fromId) },
-        order: { id: "DESC" },
+      const anchor = await this.repo.findOne({
+        where: { id: fromId },
         select: ["id", "hash"],
       });
-      expectedPrev = prior?.hash ?? GENESIS_HASH;
+      if (anchor) {
+        expectedPrev = anchor.hash;
+      } else {
+        // the boundary row is gone (purge): ids are sparse, so look for the
+        // greatest surviving row below it — `fromId - 1` itself may not exist
+        const prior = await this.repo.findOne({
+          where: { id: LessThan(fromId) },
+          order: { id: "DESC" },
+          select: ["id", "hash"],
+        });
+        if (prior) expectedPrev = prior.hash;
+      }
     }
 
     let checked = 0;

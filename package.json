@@ -1,6 +1,6 @@
 {
   "name": "event-server",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Central event broker — webhook-based publish/subscribe",
   "license": "MIT",
   "private": true,

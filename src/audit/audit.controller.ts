@@ -1,4 +1,10 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { InternalAuthGuard } from "api-server-toolkit/guard";
 import { AuditQuery, AuditStoreService } from "./audit-store.service";
 
@@ -41,10 +47,18 @@ export class AuditController {
   }
 
   @Get("verify")
-  verify(@Query("fromId") fromId?: string, @Query("toId") toId?: string) {
+  verify(
+    @Query("fromId") fromId?: string,
+    @Query("toId") toId?: string,
+    @Query("baseHash") baseHash?: string,
+  ) {
+    if (baseHash !== undefined && !/^[0-9a-f]{64}$/i.test(baseHash)) {
+      throw new BadRequestException("baseHash must be a 64-char hex sha256");
+    }
     return this.auditStore.verify(
       fromId && /^\d+$/.test(fromId) ? Number(fromId) : undefined,
       toId && /^\d+$/.test(toId) ? Number(toId) : undefined,
+      baseHash,
     );
   }
 }
