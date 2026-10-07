@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-07
+### Added
+- **`user.roles_changed` contract (`UserRolesChangedDto`)** — emitted by
+  auth-server on every role mutation (`assign`, `removeByAccount`).
+  Required: userId, username, email, roles (string[] — the full role-name
+  set after the change; empty = all revoked). Consumers use it for
+  cross-replica auth-client cache invalidation (role revocation takes
+  effect immediately instead of after the 30s cache TTL). Registered in
+  `EventContracts`, shipped in `dist/contracts/`.
+
 ## [1.2.0] - 2026-10-03
 ### Added
 - **`user.login` contract (`UserLoginDto`)** — emitted by auth-server on every

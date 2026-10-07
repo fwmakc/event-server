@@ -58,6 +58,7 @@ Event-server owns all event contracts as typed DTOs, exported via the npm subpat
 | `password.reset` | `PasswordResetDto` | username, email, subject, resetUrl |
 | `user.deactivated` | `UserDeactivatedDto` | userId, username, email |
 | `user.deleted` | `UserDeletedDto` | userId, username, email |
+| `user.roles_changed` | `UserRolesChangedDto` | userId, username, email, roles (string[] — full set after the change; empty = all revoked) |
 | `user.two_factor_code` | `UserTwoFactorCodeDto` | userId, username, email, code (+ subject?) |
 | `audit.event` | `AuditEventDto` | action (dot-path); optional outcome, accountId, username, tenantId, ip, userAgent, requestId, targetType, targetId, details |
 | `subscriber.deactivated` | `SubscriberDeactivatedDto` | subscriberId, service, url, failures, deactivatedAt |

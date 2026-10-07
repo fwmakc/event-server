@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EventContracts = exports.MailComplainedDto = exports.MailBouncedDto = exports.AuditEventDto = exports.SubscriberDeactivatedDto = exports.WebhookEnvelopeDto = exports.UserTwoFactorCodeDto = exports.UserDeletedDto = exports.UserDeactivatedDto = exports.PasswordResetDto = exports.UserConfirmedDto = exports.UserLoginDto = exports.UserRegisteredDto = void 0;
+exports.EventContracts = exports.MailComplainedDto = exports.MailBouncedDto = exports.AuditEventDto = exports.SubscriberDeactivatedDto = exports.WebhookEnvelopeDto = exports.UserTwoFactorCodeDto = exports.UserRolesChangedDto = exports.UserDeletedDto = exports.UserDeactivatedDto = exports.PasswordResetDto = exports.UserConfirmedDto = exports.UserLoginDto = exports.UserRegisteredDto = void 0;
 var user_registered_dto_1 = require("./dto/user-registered.dto");
 Object.defineProperty(exports, "UserRegisteredDto", { enumerable: true, get: function () { return user_registered_dto_1.UserRegisteredDto; } });
 var user_login_dto_1 = require("./dto/user-login.dto");
@@ -13,6 +13,8 @@ var user_deactivated_dto_1 = require("./dto/user-deactivated.dto");
 Object.defineProperty(exports, "UserDeactivatedDto", { enumerable: true, get: function () { return user_deactivated_dto_1.UserDeactivatedDto; } });
 var user_deleted_dto_1 = require("./dto/user-deleted.dto");
 Object.defineProperty(exports, "UserDeletedDto", { enumerable: true, get: function () { return user_deleted_dto_1.UserDeletedDto; } });
+var user_roles_changed_dto_1 = require("./dto/user-roles-changed.dto");
+Object.defineProperty(exports, "UserRolesChangedDto", { enumerable: true, get: function () { return user_roles_changed_dto_1.UserRolesChangedDto; } });
 var user_two_factor_code_dto_1 = require("./dto/user-two-factor-code.dto");
 Object.defineProperty(exports, "UserTwoFactorCodeDto", { enumerable: true, get: function () { return user_two_factor_code_dto_1.UserTwoFactorCodeDto; } });
 var webhook_envelope_dto_1 = require("./dto/webhook-envelope.dto");
@@ -31,6 +33,7 @@ const user_confirmed_dto_2 = require("./dto/user-confirmed.dto");
 const password_reset_dto_2 = require("./dto/password-reset.dto");
 const user_deactivated_dto_2 = require("./dto/user-deactivated.dto");
 const user_deleted_dto_2 = require("./dto/user-deleted.dto");
+const user_roles_changed_dto_2 = require("./dto/user-roles-changed.dto");
 const user_two_factor_code_dto_2 = require("./dto/user-two-factor-code.dto");
 const subscriber_deactivated_dto_2 = require("./dto/subscriber-deactivated.dto");
 const audit_event_dto_2 = require("./dto/audit-event.dto");
@@ -43,6 +46,7 @@ exports.EventContracts = {
     "password.reset": password_reset_dto_2.PasswordResetDto,
     "user.deactivated": user_deactivated_dto_2.UserDeactivatedDto,
     "user.deleted": user_deleted_dto_2.UserDeletedDto,
+    "user.roles_changed": user_roles_changed_dto_2.UserRolesChangedDto,
     "user.two_factor_code": user_two_factor_code_dto_2.UserTwoFactorCodeDto,
     "subscriber.deactivated": subscriber_deactivated_dto_2.SubscriberDeactivatedDto,
     "audit.event": audit_event_dto_2.AuditEventDto,
