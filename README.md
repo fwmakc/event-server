@@ -1169,13 +1169,69 @@ Already have an event system? You can adopt event-server selectively:
 
 ---
 
+## Production Notes
+
+Deployment runbook for the whole stack (service registry, secrets, TLS,
+upgrades, scaling, operations): [gateway-server/docs/DEPLOYMENT.md](https://github.com/fwmakc/gateway-server/blob/master/docs/DEPLOYMENT.md).
+
+**Role in the stack.** The central event broker and the schema registry for
+event contracts. Services publish typed events (`POST /events`, internal
+key); the worker delivers webhooks to subscribers with retry + exponential
+backoff, a circuit breaker (permanent failures → subscriber deactivated),
+stale-claim reclamation, and a tamper-evident audit store.
+
+**Wiring.**
+
+- Internal only — nginx does not proxy it. Publishers: auth, api, file,
+  message, any toolkit service (`IEventClient` / `HttpEventClient` /
+  `OutboxModule`).
+- Subscribers register via `POST /subscribe` with per-replica webhook URLs
+  and event patterns; deliveries are HMAC-signed when `WEBHOOK_SECRET` is
+  set (300 s replay window).
+- Anti-SSRF egress policy on subscriber URLs (`WEBHOOK_EGRESS_MODE`).
+
+**Production configuration.**
+
+| Concern | Setting |
+|---------|---------|
+| Required secrets | `DB_PASSWORD`, `INTERNAL_API_KEY` |
+| Egress | `WEBHOOK_EGRESS_MODE=internal` (default, docker network) / `public` / `allowlist` + `WEBHOOK_ALLOW_HOSTS` |
+| Strictness | `EVENT_STRICT_MODE` validates published payloads against the contract DTOs |
+| Worker | `BATCH_SIZE=50`, `WORKER_INTERVAL_MS=500`, `DB_POOL_MAX=50` (compose defaults) |
+
+**Scaling.** Delivery claims use `FOR UPDATE SKIP LOCKED` — replicas
+process disjoint work and scale safely. Per-replica subscriber URLs mean a
+scale change leaves dead entries behind: the circuit breaker deactivates
+them, the registry rows remain — prune after topology changes
+(`DELETE /subscribe/:id`).
+
+**Verified under load** (dates and raw numbers:
+[gateway-server/load-tests/results.md](https://github.com/fwmakc/gateway-server/blob/master/load-tests/results.md)):
+
+- 33 CI tests (events, subscribers, delivery, worker, auth).
+- Ingest 91.6 → 95.4 events/s, p95 73 ms, 0 failures; 4978/4978 deliveries
+  completed after the run.
+- Chaos: SIGKILL mid-publish-burst — every accepted event was delivered
+  across the restart; the stale-reclaim path exercised live.
+- A 7.6k no-subscriber backlog shed in ~90 s once the re-pend TTL bounded
+  it (no-subscriber events finalize instead of re-pending forever).
+- Adversarial storm (2026-10-05): audit chain verified intact end to end
+  under a browse + write + bruteforce mix.
+
+**Semantics to accept.** Delivery is at-least-once **after acceptance** — a
+publish rejected during event-server downtime is the publisher's loss; use
+the toolkit `OutboxModule` (transactional outbox + relay worker) when an
+event must not be lost.
+
+---
+
 ## Versioning
 
 Each service versions **independently** (semver): a `vX.Y.Z` git tag marks the released state of each repo. There is no stack-wide shared major — compatibility is guaranteed by **exact dependency pins**, not by version numbers.
 
 - Repos on `0.x` (toolkit, api/auth/file/message-server, gateway): the minor carries breaking changes while the stack is in development; patch = fixes.
 - `event-server` follows a `1.x` line (stable event-contract surface).
-- Consumers pin sources by tag: `"api-server-toolkit": "github:fwmakc/api-server-toolkit#v0.32.0"`, `"event-server": "github:fwmakc/event-server#v1.5.0"`.
+- Consumers pin sources by tag: `"api-server-toolkit": "github:fwmakc/api-server-toolkit#v0.32.0"`, `"event-server": "github:fwmakc/event-server#v1.6.0"`.
 
 ### Breaking-change procedure
 
@@ -1185,16 +1241,16 @@ Each service versions **independently** (semver): a `vX.Y.Z` git tag marks the r
 
 ### Current versions
 
-> Synced across all repos on 2026-10-07. Source of truth: the `v*` git tags at each repo HEAD.
+> Synced across all repos on 2026-10-08 (wave 15). Source of truth: the `v*` git tags at each repo HEAD.
 
 | Service | Version |
 |---------|---------|
 | [api-server-toolkit](https://github.com/fwmakc/api-server-toolkit) | v0.32.0 |
-| [event-server](https://github.com/fwmakc/event-server) | v1.5.0 |
-| [auth-server](https://github.com/fwmakc/auth-server) | v0.13.0 |
+| [event-server](https://github.com/fwmakc/event-server) | v1.6.0 |
+| [auth-server](https://github.com/fwmakc/auth-server) | v0.14.0 |
 | [message-server](https://github.com/fwmakc/message-server) | v0.7.0 |
-| [file-server](https://github.com/fwmakc/file-server) | v0.8.1 |
+| [file-server](https://github.com/fwmakc/file-server) | v0.8.3 |
 | [chat-server](https://github.com/fwmakc/chat-server) | v0.1.3 (frozen) |
-| [api-server](https://github.com/fwmakc/api-server) | v0.8.0 |
-| [gateway-server](https://github.com/fwmakc/gateway-server) | v0.6.0 (infra) |
+| [api-server](https://github.com/fwmakc/api-server) | v0.9.0 |
+| [gateway-server](https://github.com/fwmakc/gateway-server) | v0.7.0 (infra) |
 | [api-server-scaffold](https://github.com/fwmakc/api-server-scaffold) | v0.1.5 |
